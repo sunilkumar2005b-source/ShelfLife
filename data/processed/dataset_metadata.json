@@ -1,0 +1,40 @@
+{
+  "dataset_source": "data/raw/grocery_inventory.csv",
+  "total_rows": 989,
+  "total_raw_columns": 20,
+  "cleaned_rows": 989,
+  "train_samples": 791,
+  "test_samples": 198,
+  "random_seed": 42,
+  "target_variable": "Sales_Volume",
+  "target_mean": 58.94843276036401,
+  "target_std": 23.002384361332112,
+  "target_min": 20.0,
+  "target_max": 100.0,
+  "features_count": 14,
+  "features_list": [
+    "Stock_Quantity",
+    "Reorder_Level",
+    "Reorder_Quantity",
+    "Unit_Price",
+    "Shelf_Life_Days",
+    "Received_Month",
+    "Received_DayOfWeek",
+    "Catagory_Bakery",
+    "Catagory_Beverages",
+    "Catagory_Dairy",
+    "Catagory_Fruits & Vegetables",
+    "Catagory_Grains & Pulses",
+    "Catagory_Oils & Fats",
+    "Catagory_Seafood"
+  ],
+  "categories": [
+    "Fruits & Vegetables",
+    "Oils & Fats",
+    "Dairy",
+    "Grains & Pulses",
+    "Seafood",
+    "Bakery",
+    "Beverages"
+  ]
+}

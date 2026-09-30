@@ -1,0 +1,1476 @@
+import { useEffect, useMemo, useState } from "react";
+import "./App.css";
+
+const API = "http://127.0.0.1:8000";
+
+/* =========================================================
+   HELPER FUNCTIONS
+========================================================= */
+
+function normalizeProbability(value) {
+  const number = Number(value);
+
+  if (Number.isNaN(number)) {
+    return 0;
+  }
+
+  if (number >= 0 && number <= 1) {
+    return number * 100;
+  }
+
+  return number;
+}
+
+function formatProbability(value) {
+  const probability = normalizeProbability(value);
+
+  if (Number.isInteger(probability)) {
+    return `${probability}%`;
+  }
+
+  return `${probability.toFixed(1)}%`;
+}
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
+function parseLocalDate(dateValue) {
+  if (!dateValue) {
+    return null;
+  }
+
+  const dateString = String(dateValue).slice(0, 10);
+  const parts = dateString.split("-");
+
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day)
+  ) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function getDaysToExpiry(expiryDate) {
+  const expiry = parseLocalDate(expiryDate);
+
+  if (!expiry) {
+    return 0;
+  }
+
+  const today = new Date();
+
+  const todayOnly = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const difference =
+    expiry.getTime() - todayOnly.getTime();
+
+  return Math.max(
+    0,
+    Math.ceil(
+      difference / (1000 * 60 * 60 * 24)
+    )
+  );
+}
+
+/* =========================================================
+   HEALTH SCORE
+========================================================= */
+
+function calculateHealthScore(
+  stock,
+  demand,
+  daysToExpiry,
+  spoilageProbability
+) {
+  let score = 100;
+
+  if (daysToExpiry <= 1) {
+    score -= 40;
+  } else if (daysToExpiry <= 3) {
+    score -= 25;
+  } else if (daysToExpiry <= 5) {
+    score -= 12;
+  }
+
+  if (spoilageProbability >= 80) {
+    score -= 35;
+  } else if (spoilageProbability >= 60) {
+    score -= 25;
+  } else if (spoilageProbability >= 40) {
+    score -= 15;
+  }
+
+  if (demand > 0) {
+    const stockRatio = stock / demand;
+
+    if (stockRatio >= 3) {
+      score -= 20;
+    } else if (stockRatio >= 2) {
+      score -= 12;
+    } else if (stockRatio >= 1.5) {
+      score -= 5;
+    }
+  }
+
+  return Math.max(
+    0,
+    Math.min(100, score)
+  );
+}
+
+function getHealthStatus(score) {
+  if (score < 40) {
+    return {
+      label: "Critical",
+      className: "critical",
+      icon: "🔴",
+    };
+  }
+
+  if (score < 70) {
+    return {
+      label: "Needs Attention",
+      className: "attention",
+      icon: "🟡",
+    };
+  }
+
+  return {
+    label: "Healthy",
+    className: "healthy",
+    icon: "🟢",
+  };
+}
+
+/* =========================================================
+   RECOMMENDATION
+========================================================= */
+
+function getRecommendation(
+  stock,
+  demand,
+  daysToExpiry,
+  spoilageProbability
+) {
+  if (
+    daysToExpiry <= 1 &&
+    spoilageProbability >= 70
+  ) {
+    return {
+      text: "Urgent Clearance",
+      icon: "",
+      className: "urgent",
+    };
+  }
+
+  if (
+    daysToExpiry <= 2 ||
+    spoilageProbability >= 70
+  ) {
+    return {
+      text: "Sell Quickly",
+      icon: "",
+      className: "sell",
+    };
+  }
+
+  if (stock < demand) {
+    return {
+      text: "Reorder",
+      icon: "",
+      className: "reorder",
+    };
+  }
+
+  if (
+    stock > demand * 2 &&
+    daysToExpiry <= 5
+  ) {
+    return {
+      text: "Monitor Stock",
+      icon: "",
+      className: "monitor",
+    };
+  }
+
+  return {
+    text: "Sufficient Stock",
+    icon: "",
+    className: "sufficient",
+  };
+}
+
+/* =========================================================
+   AI EXPLANATION
+========================================================= */
+
+function getExplanation(
+  stock,
+  demand,
+  daysToExpiry,
+  expiryDate,
+  spoilageProbability,
+  recommendation
+) {
+  const probabilityText =
+    formatProbability(spoilageProbability);
+
+  if (
+    recommendation.text ===
+    "Urgent Clearance"
+  ) {
+    return (
+      `${stock} units are currently in stock, while predicted demand is ${demand} units. ` +
+      `Spoilage probability is ${probabilityText}. ` +
+      `The product expires on ${expiryDate}, which is only ${daysToExpiry} day(s) away. ` +
+      `Immediate clearance is recommended to reduce wastage.`
+    );
+  }
+
+  if (
+    recommendation.text ===
+    "Sell Quickly"
+  ) {
+    return (
+      `${stock} units are in stock, while predicted demand is only ${demand} units. ` +
+      `Spoilage probability is ${probabilityText} with ${daysToExpiry} day(s) remaining. ` +
+      `Prioritize selling this product quickly.`
+    );
+  }
+
+  if (
+    recommendation.text ===
+    "Reorder"
+  ) {
+    return (
+      `Current stock is ${stock} units, while predicted demand is ${demand} units. ` +
+      `Stock may not be sufficient for expected demand. ` +
+      `Consider placing a new order. Expiry date is ${expiryDate}.`
+    );
+  }
+
+  if (
+    recommendation.text ===
+    "Monitor Stock"
+  ) {
+    return (
+      `${stock} units are currently available compared with predicted demand of ${demand} units. ` +
+      `Stock is relatively high and the product expires in ${daysToExpiry} day(s). ` +
+      `Monitor sales and avoid unnecessary additional purchases.`
+    );
+  }
+
+  return (
+    `Current stock is ${stock} units, compared with predicted demand of ${demand} units. ` +
+    `The available stock is sufficient for the expected demand. ` +
+    `Expiry date is ${expiryDate}, which is ${daysToExpiry} day(s) away.`
+  );
+}
+
+/* =========================================================
+   APP
+========================================================= */
+
+function App() {
+  const [activePage, setActivePage] =
+    useState("dashboard");
+
+  const [products, setProducts] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [spoilage, setSpoilage] = useState([]);
+  const [forecasts, setForecasts] = useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const [intelligenceSearch, setIntelligenceSearch] =
+    useState("");
+
+  const [intelligenceFilter, setIntelligenceFilter] =
+    useState("all");
+
+  /* =====================================================
+     LOAD DATA
+  ===================================================== */
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const responses =
+        await Promise.all([
+          fetch(`${API}/products`),
+          fetch(`${API}/inventory`),
+          fetch(`${API}/spoilage-predictions`),
+          fetch(`${API}/demand-forecasts`),
+        ]);
+
+      const [
+        productsResponse,
+        inventoryResponse,
+        spoilageResponse,
+        forecastResponse,
+      ] = responses;
+
+      if (!productsResponse.ok) {
+        throw new Error(
+          "Unable to load products."
+        );
+      }
+
+      if (!inventoryResponse.ok) {
+        throw new Error(
+          "Unable to load inventory."
+        );
+      }
+
+      if (!spoilageResponse.ok) {
+        throw new Error(
+          "Unable to load spoilage predictions."
+        );
+      }
+
+      if (!forecastResponse.ok) {
+        throw new Error(
+          "Unable to load demand forecasts."
+        );
+      }
+
+      const [
+        productsData,
+        inventoryData,
+        spoilageData,
+        forecastData,
+      ] = await Promise.all([
+        productsResponse.json(),
+        inventoryResponse.json(),
+        spoilageResponse.json(),
+        forecastResponse.json(),
+      ]);
+
+      setProducts(
+        Array.isArray(productsData)
+          ? productsData
+          : []
+      );
+
+      setInventory(
+        Array.isArray(inventoryData)
+          ? inventoryData
+          : []
+      );
+
+      setSpoilage(
+        Array.isArray(spoilageData)
+          ? spoilageData
+          : []
+      );
+
+      setForecasts(
+        Array.isArray(forecastData)
+          ? forecastData
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "ShelfLife API Error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to load ShelfLife data."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  /* =====================================================
+     FIND DATA
+  ===================================================== */
+
+  const getSpoilageForProduct = (
+    productId
+  ) => {
+    return spoilage.find(
+      (item) =>
+        Number(item.product_id) ===
+        Number(productId)
+    );
+  };
+
+  const getForecastForProduct = (
+    productId
+  ) => {
+    return forecasts.find(
+      (item) =>
+        Number(item.product_id) ===
+        Number(productId)
+    );
+  };
+
+  /* =====================================================
+     INVENTORY INTELLIGENCE DATA
+  ===================================================== */
+
+  const intelligenceData =
+    useMemo(() => {
+      return inventory.map((item) => {
+        const spoilageItem =
+          getSpoilageForProduct(
+            item.product_id
+          );
+
+        const forecastItem =
+          getForecastForProduct(
+            item.product_id
+          );
+
+        const stock =
+          Number(item.quantity) || 0;
+
+        const demand =
+          Number(
+            forecastItem?.predicted_demand
+          ) || 0;
+
+        const daysToExpiry =
+          getDaysToExpiry(
+            item.expiry_date
+          );
+
+        const spoilageProbability =
+          normalizeProbability(
+            spoilageItem?.spoilage_probability
+          );
+
+        const healthScore =
+          calculateHealthScore(
+            stock,
+            demand,
+            daysToExpiry,
+            spoilageProbability
+          );
+
+        const health =
+          getHealthStatus(
+            healthScore
+          );
+
+        const recommendation =
+          getRecommendation(
+            stock,
+            demand,
+            daysToExpiry,
+            spoilageProbability
+          );
+
+        const explanation =
+          getExplanation(
+            stock,
+            demand,
+            daysToExpiry,
+            item.expiry_date,
+            spoilageProbability,
+            recommendation
+          );
+
+        return {
+          ...item,
+          stock,
+          demand,
+          daysToExpiry,
+          spoilageProbability,
+          healthScore,
+          health,
+          recommendation,
+          explanation,
+          riskLevel:
+            spoilageItem?.risk_level ||
+            "Unknown",
+          modelName:
+            spoilageItem?.model_name ||
+            "Random Forest",
+        };
+      });
+    }, [
+      inventory,
+      spoilage,
+      forecasts,
+    ]);
+
+  /* =====================================================
+     RISK COUNTS
+  ===================================================== */
+
+  const highRisk =
+    spoilage.filter(
+      (item) =>
+        item.risk_level?.toLowerCase() ===
+        "high"
+    ).length;
+
+  const mediumRisk =
+    spoilage.filter(
+      (item) =>
+        item.risk_level?.toLowerCase() ===
+        "medium"
+    ).length;
+
+  const lowRisk =
+    spoilage.filter(
+      (item) =>
+        item.risk_level?.toLowerCase() ===
+        "low"
+    ).length;
+
+  /* =====================================================
+     INTELLIGENCE COUNTS
+  ===================================================== */
+
+  const urgentCount =
+    intelligenceData.filter(
+      (item) =>
+        item.recommendation.text ===
+        "Urgent Clearance"
+    ).length;
+
+  const sellQuicklyCount =
+    intelligenceData.filter(
+      (item) =>
+        item.recommendation.text ===
+        "Sell Quickly"
+    ).length;
+
+  const reorderCount =
+    intelligenceData.filter(
+      (item) =>
+        item.recommendation.text ===
+        "Reorder"
+    ).length;
+
+  const monitorCount =
+    intelligenceData.filter(
+      (item) =>
+        item.recommendation.text ===
+        "Monitor Stock"
+    ).length;
+
+  const sufficientCount =
+    intelligenceData.filter(
+      (item) =>
+        item.recommendation.text ===
+        "Sufficient Stock"
+    ).length;
+
+  /* =====================================================
+     DASHBOARD
+  ===================================================== */
+
+  const renderDashboard = () => {
+    const attentionProducts =
+      intelligenceData.filter(
+        (item) =>
+          item.riskLevel?.toLowerCase() ===
+          "high"
+      );
+
+    return (
+      <>
+        <h2 className="page-title">
+          Dashboard
+        </h2>
+
+        <div className="cards">
+          <div className="card">
+            <h3>Total Products</h3>
+            <p>{products.length}</p>
+          </div>
+
+          <div className="card">
+            <h3>Inventory Items</h3>
+            <p>{inventory.length}</p>
+          </div>
+
+          <div className="card high-card">
+            <h3>High Spoilage Risk</h3>
+            <p>{highRisk}</p>
+          </div>
+
+          <div className="card medium-card">
+            <h3>Medium Risk</h3>
+            <p>{mediumRisk}</p>
+          </div>
+        </div>
+
+        <div className="section">
+          <h2>Risk Summary</h2>
+
+          <div className="risk-summary">
+            <div className="risk-box high">
+              <h3>High Risk</h3>
+              <p>{highRisk}</p>
+            </div>
+
+            <div className="risk-box medium">
+              <h3>Medium Risk</h3>
+              <p>{mediumRisk}</p>
+            </div>
+
+            <div className="risk-box low">
+              <h3>Low Risk</h3>
+              <p>{lowRisk}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="section">
+          <h2>Products Requiring Attention</h2>
+
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Days Remaining</th>
+                  <th>Probability</th>
+                  <th>Risk Level</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {attentionProducts.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.inventory_id
+                      }
+                    >
+                      <td>
+                        {item.product_name}
+                      </td>
+
+                      <td>
+                        {item.daysToExpiry} days
+                      </td>
+
+                      <td>
+                        {formatProbability(
+                          item.spoilageProbability
+                        )}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`risk ${
+                            item.riskLevel.toLowerCase()
+                          }`}
+                        >
+                          {item.riskLevel}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     PRODUCTS
+  ===================================================== */
+
+  const renderProducts = () => {
+    return (
+      <>
+        <h2 className="page-title">
+          Products
+        </h2>
+
+        <div className="section">
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Unit</th>
+                  <th>Purchase Price</th>
+                  <th>Selling Price</th>
+                  <th>Shelf Life</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {products.map(
+                  (product) => (
+                    <tr
+                      key={
+                        product.product_id
+                      }
+                    >
+                      <td>
+                        {product.product_id}
+                      </td>
+
+                      <td>
+                        {product.product_name}
+                      </td>
+
+                      <td>
+                        {product.category}
+                      </td>
+
+                      <td>
+                        {product.unit}
+                      </td>
+
+                      <td>
+                        ₹
+                        {product.purchase_price}
+                      </td>
+
+                      <td>
+                        ₹
+                        {product.selling_price}
+                      </td>
+
+                      <td>
+                        {product.shelf_life_days} days
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     INVENTORY
+  ===================================================== */
+
+  const renderInventory = () => {
+    return (
+      <>
+        <h2 className="page-title">
+          Inventory
+        </h2>
+
+        <div className="section">
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Batch</th>
+                  <th>Quantity</th>
+                  <th>Purchase Date</th>
+                  <th>Expiry Date</th>
+                  <th>Temperature</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {inventory.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.inventory_id
+                      }
+                    >
+                      <td>
+                        {item.inventory_id}
+                      </td>
+
+                      <td>
+                        {item.product_name}
+                      </td>
+
+                      <td>
+                        {item.category}
+                      </td>
+
+                      <td>
+                        {item.batch_number}
+                      </td>
+
+                      <td>
+                        {item.quantity}
+                      </td>
+
+                      <td>
+                        {item.purchase_date}
+                      </td>
+
+                      <td>
+                        {item.expiry_date}
+                      </td>
+
+                      <td>
+                        {item.storage_temperature}°C
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     SPOILAGE
+  ===================================================== */
+
+  const renderSpoilage = () => {
+    return (
+      <>
+        <h2 className="page-title">
+          Spoilage Risk Analysis
+        </h2>
+
+        <div className="section">
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Days Remaining</th>
+                  <th>Probability</th>
+                  <th>Risk Level</th>
+                  <th>Model</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {intelligenceData.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.inventory_id
+                      }
+                    >
+                      <td>
+                        {item.product_name}
+                      </td>
+
+                      <td>
+                        {item.daysToExpiry} days
+                      </td>
+
+                      <td>
+                        {formatProbability(
+                          item.spoilageProbability
+                        )}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`risk ${
+                            item.riskLevel.toLowerCase()
+                          }`}
+                        >
+                          {item.riskLevel}
+                        </span>
+                      </td>
+
+                      <td>
+                        {item.modelName}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     DEMAND FORECAST
+  ===================================================== */
+
+  const renderForecast = () => {
+    return (
+      <>
+        <h2 className="page-title">
+          Demand Forecast
+        </h2>
+
+        <div className="section">
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Forecast Date</th>
+                  <th>Predicted Demand</th>
+                  <th>Model</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {forecasts.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.forecast_id
+                      }
+                    >
+                      <td>
+                        {item.forecast_id}
+                      </td>
+
+                      <td>
+                        {item.product_name}
+                      </td>
+
+                      <td>
+                        {item.category}
+                      </td>
+
+                      <td>
+                        {item.forecast_date}
+                      </td>
+
+                      <td>
+                        {item.predicted_demand}
+                      </td>
+
+                      <td>
+                        {item.model_name}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     INVENTORY INTELLIGENCE
+  ===================================================== */
+
+  const renderIntelligence = () => {
+    const search =
+      intelligenceSearch
+        .trim()
+        .toLowerCase();
+
+    const filteredData =
+      intelligenceData.filter(
+        (item) => {
+          const productName =
+            String(
+              item.product_name || ""
+            ).toLowerCase();
+
+          const matchesSearch =
+            productName.includes(search);
+
+          const matchesFilter =
+            intelligenceFilter ===
+              "all" ||
+            item.health.className ===
+              intelligenceFilter;
+
+          return (
+            matchesSearch &&
+            matchesFilter
+          );
+        }
+      );
+
+    return (
+      <>
+        <h2 className="page-title">
+           Inventory Intelligence
+        </h2>
+
+        <div className="intelligence-summary">
+          <div className="intelligence-card urgent-summary">
+            <span></span>
+
+            <div>
+              <h3>Urgent Clearance</h3>
+              <strong>{urgentCount}</strong>
+            </div>
+          </div>
+
+          <div className="intelligence-card sell-summary">
+            <span> </span>
+
+            <div>
+              <h3>Sell Quickly</h3>
+              <strong>{sellQuicklyCount}</strong>
+            </div>
+          </div>
+
+          <div className="intelligence-card reorder-summary">
+            <span>🔴</span>
+
+            <div>
+              <h3>Reorder</h3>
+              <strong>{reorderCount}</strong>
+            </div>
+          </div>
+
+          <div className="intelligence-card monitor-summary">
+            <span>🟡</span>
+
+            <div>
+              <h3>Monitor</h3>
+              <strong>{monitorCount}</strong>
+            </div>
+          </div>
+
+          <div className="intelligence-card sufficient-summary">
+            <span>🟢</span>
+
+            <div>
+              <h3>Sufficient</h3>
+              <strong>{sufficientCount}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="intelligence-controls">
+          <input
+            type="text"
+            placeholder="🔍 Search product..."
+            value={intelligenceSearch}
+            onChange={(event) =>
+              setIntelligenceSearch(
+                event.target.value
+              )
+            }
+          />
+
+          <div className="filter-buttons">
+            <button
+              className={
+                intelligenceFilter ===
+                "all"
+                  ? "filter-active"
+                  : ""
+              }
+              onClick={() =>
+                setIntelligenceFilter(
+                  "all"
+                )
+              }
+            >
+              All
+            </button>
+
+            <button
+              className={
+                intelligenceFilter ===
+                "critical"
+                  ? "filter-active"
+                  : ""
+              }
+              onClick={() =>
+                setIntelligenceFilter(
+                  "critical"
+                )
+              }
+            >
+              🔴 Critical
+            </button>
+
+            <button
+              className={
+                intelligenceFilter ===
+                "attention"
+                  ? "filter-active"
+                  : ""
+              }
+              onClick={() =>
+                setIntelligenceFilter(
+                  "attention"
+                )
+              }
+            >
+              🟡 Attention
+            </button>
+
+            <button
+              className={
+                intelligenceFilter ===
+                "healthy"
+                  ? "filter-active"
+                  : ""
+              }
+              onClick={() =>
+                setIntelligenceFilter(
+                  "healthy"
+                )
+              }
+            >
+              🟢 Healthy
+            </button>
+          </div>
+        </div>
+
+        <div className="section intelligence-section">
+          <div className="table-wrapper">
+            <table className="intelligence-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Current Stock</th>
+                  <th>Predicted Demand</th>
+                  <th>Expiry Date</th>
+                  <th>Days to Expiry</th>
+                  <th>Health Score</th>
+                  <th>Spoilage Risk</th>
+                  <th>Recommendation</th>
+                  <th>AI Explanation</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredData.map(
+                  (item) => (
+                    <tr
+                      key={
+                        item.inventory_id
+                      }
+                      className={`health-row ${item.health.className}`}
+                    >
+                      <td className="product-name">
+                        {item.product_name}
+                      </td>
+
+                      <td>
+                        {item.stock}
+                      </td>
+
+                      <td>
+                        {item.demand}
+                      </td>
+
+                      <td>
+                        <span
+                          className={
+                            item.daysToExpiry <= 2
+                              ? "expiry-danger"
+                              : item.daysToExpiry <= 5
+                              ? "expiry-warning"
+                              : "expiry-safe"
+                          }
+                        >
+                          {item.expiry_date}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={
+                            item.daysToExpiry <= 2
+                              ? "days-danger"
+                              : item.daysToExpiry <= 5
+                              ? "days-warning"
+                              : "days-safe"
+                          }
+                        >
+                          {item.daysToExpiry} days
+                        </span>
+                      </td>
+
+                      <td>
+                        <div
+                          className={`health-score ${item.health.className}`}
+                        >
+                          <strong>
+                            {item.healthScore}
+                          </strong>
+
+                          <span>
+                            /100
+                          </span>
+
+                          <small>
+                            {item.health.icon}{" "}
+                            {item.health.label}
+                          </small>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`risk ${item.riskLevel.toLowerCase()}`}
+                        >
+                          {item.riskLevel}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div
+                          className={`recommendation ${item.recommendation.className}`}
+                        >
+                          <span>
+                            {item.recommendation.icon}
+                          </span>
+
+                          <strong>
+                            {item.recommendation.text}
+                          </strong>
+                        </div>
+                      </td>
+
+                      <td className="ai-explanation">
+                        {item.explanation}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {filteredData.length === 0 && (
+            <div className="no-results">
+              🔍 No products found.
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  /* =====================================================
+     LOADING
+  ===================================================== */
+
+  if (loading) {
+    return (
+      <div className="app">
+        <header className="header">
+          <h1>ShelfLife</h1>
+          <p>
+            Perishable Inventory Management System
+          </p>
+        </header>
+
+        <main>
+          <div className="loading">
+            Loading ShelfLife data...
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  /* =====================================================
+     ERROR
+  ===================================================== */
+
+  if (error) {
+    return (
+      <div className="app">
+        <header className="header">
+          <h1>ShelfLife</h1>
+          <p>
+            Perishable Inventory Management System
+          </p>
+        </header>
+
+        <main>
+          <div className="section error-section">
+            <h2>
+               Unable to Load Data
+            </h2>
+
+            <p>{error}</p>
+
+            <button
+              className="retry-button"
+              onClick={loadData}
+            >
+               Retry
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  /* =====================================================
+     PAGE ROUTING
+  ===================================================== */
+
+  const renderPage = () => {
+    switch (activePage) {
+      case "dashboard":
+        return renderDashboard();
+
+      case "products":
+        return renderProducts();
+
+      case "inventory":
+        return renderInventory();
+
+      case "spoilage":
+        return renderSpoilage();
+
+      case "forecast":
+        return renderForecast();
+
+      case "intelligence":
+        return renderIntelligence();
+
+      default:
+        return renderDashboard();
+    }
+  };
+
+  /* =====================================================
+     MAIN UI
+  ===================================================== */
+
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>ShelfLife</h1>
+
+        <p>
+          Perishable Inventory Management System
+        </p>
+      </header>
+
+      <nav className="navbar">
+        <button
+          className={
+            activePage === "dashboard"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("dashboard")
+          }
+        >
+           Dashboard
+        </button>
+
+        <button
+          className={
+            activePage === "products"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("products")
+          }
+        >
+           Products
+        </button>
+
+        <button
+          className={
+            activePage === "inventory"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("inventory")
+          }
+        >
+           Inventory
+        </button>
+
+        <button
+          className={
+            activePage === "spoilage"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("spoilage")
+          }
+        >
+           Spoilage Risk
+        </button>
+
+        <button
+          className={
+            activePage === "forecast"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("forecast")
+          }
+        >
+           Demand Forecast
+        </button>
+
+        <button
+          className={
+            activePage === "intelligence"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActivePage("intelligence")
+          }
+        >
+           Inventory Intelligence
+        </button>
+      </nav>
+
+      <main>
+        {renderPage()}
+      </main>
+    </div>
+  );
+}
+
+export default App;

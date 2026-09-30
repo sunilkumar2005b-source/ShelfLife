@@ -1,0 +1,9 @@
+from .products import router as products_router
+from .inventory import router as inventory_router
+from .sales import router as sales_router
+from .suppliers import router as suppliers_router
+from .purchase_orders import router as purchase_orders_router
+from .weather import router as weather_router
+from .analytics import router as analytics_router
+from .ml import router as ml_router
+from .reports import router as reports_router

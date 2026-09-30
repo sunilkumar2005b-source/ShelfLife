@@ -1,0 +1,1117 @@
+from datetime import date
+from typing import Any
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from database import get_connection
+
+
+# ============================================================
+# SHELFLIFE FASTAPI APPLICATION
+# ============================================================
+
+app = FastAPI(
+    title="ShelfLife API",
+    description="Perishable Inventory Management System API",
+    version="1.0.0"
+)
+
+
+# ============================================================
+# CORS CONFIGURATION
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+   allow_origins=[
+    "http://localhost:5175",
+    "http://localhost:5174",
+    "http://localhost:5173",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5173",
+],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def close_database(connection, cursor):
+    """
+    Safely close cursor and database connection.
+    """
+    try:
+        if cursor is not None:
+            cursor.close()
+    except Exception:
+        pass
+
+    try:
+        if connection is not None:
+            connection.close()
+    except Exception:
+        pass
+
+
+def days_until_expiry(expiry_date):
+    """
+    Calculate number of days remaining until expiry.
+    """
+    if expiry_date is None:
+        return 0
+
+    if isinstance(expiry_date, str):
+        expiry_date = date.fromisoformat(expiry_date)
+
+    return max((expiry_date - date.today()).days, 0)
+
+
+def calculate_health_score(
+    current_stock: float,
+    predicted_demand: float,
+    days_remaining: int,
+    spoilage_probability: float
+) -> int:
+    """
+    Calculate inventory health score from 0-100.
+
+    Higher score = healthier inventory.
+    Lower score = greater attention required.
+    """
+
+    # --------------------------------------------------------
+    # 1. Stock coverage score
+    # --------------------------------------------------------
+
+    if predicted_demand <= 0:
+        stock_score = 100
+    else:
+        stock_ratio = current_stock / predicted_demand
+
+        if stock_ratio >= 2.0:
+            stock_score = 100
+        elif stock_ratio >= 1.5:
+            stock_score = 90
+        elif stock_ratio >= 1.0:
+            stock_score = 75
+        elif stock_ratio >= 0.75:
+            stock_score = 55
+        elif stock_ratio >= 0.50:
+            stock_score = 35
+        else:
+            stock_score = 20
+
+    # --------------------------------------------------------
+    # 2. Expiry score
+    # --------------------------------------------------------
+
+    if days_remaining <= 0:
+        expiry_score = 0
+    elif days_remaining == 1:
+        expiry_score = 20
+    elif days_remaining == 2:
+        expiry_score = 35
+    elif days_remaining == 3:
+        expiry_score = 50
+    elif days_remaining <= 5:
+        expiry_score = 65
+    elif days_remaining <= 7:
+        expiry_score = 80
+    elif days_remaining <= 14:
+        expiry_score = 90
+    else:
+        expiry_score = 100
+
+    # --------------------------------------------------------
+    # 3. Spoilage score
+    # --------------------------------------------------------
+
+    probability = max(0.0, min(float(spoilage_probability), 1.0))
+
+    spoilage_score = (1.0 - probability) * 100
+
+    # --------------------------------------------------------
+    # Weighted final score
+    # --------------------------------------------------------
+
+    score = (
+        stock_score * 0.30
+        + expiry_score * 0.35
+        + spoilage_score * 0.35
+    )
+
+    return max(0, min(100, round(score)))
+
+
+def health_status(score: int) -> str:
+    """
+    Convert health score into a readable status.
+    """
+
+    if score >= 75:
+        return "Healthy"
+
+    if score >= 50:
+        return "Needs Attention"
+
+    return "Critical"
+
+
+def get_recommendation(
+    current_stock: float,
+    predicted_demand: float,
+    days_remaining: int,
+    spoilage_probability: float
+) -> tuple[str, str]:
+    """
+    Generate inventory recommendation and explanation.
+    """
+
+    probability_percent = spoilage_probability * 100
+
+    # --------------------------------------------------------
+    # URGENT CLEARANCE
+    # --------------------------------------------------------
+
+    if days_remaining <= 1 and probability_percent >= 70:
+        recommendation = "Urgent Clearance"
+
+        explanation = (
+            f"{int(current_stock)} units are currently in stock, "
+            f"while predicted demand is {int(predicted_demand)} units. "
+            f"Spoilage probability is {probability_percent:.0f}%. "
+            f"The product expires in {days_remaining} day(s). "
+            f"Immediate clearance is recommended to reduce wastage."
+        )
+
+        return recommendation, explanation
+
+    # --------------------------------------------------------
+    # SELL QUICKLY
+    # --------------------------------------------------------
+
+    if (
+        days_remaining <= 3
+        and probability_percent >= 60
+        and current_stock > predicted_demand
+    ):
+        recommendation = "Sell Quickly"
+
+        explanation = (
+            f"{int(current_stock)} units are in stock, while predicted "
+            f"demand is only {int(predicted_demand)} units. "
+            f"Spoilage probability is {probability_percent:.0f}% "
+            f"with {days_remaining} day(s) remaining. "
+            f"Prioritize selling this product quickly."
+        )
+
+        return recommendation, explanation
+
+    # --------------------------------------------------------
+    # REORDER
+    # --------------------------------------------------------
+
+    if current_stock < predicted_demand:
+        reorder_quantity = max(
+            round(predicted_demand - current_stock),
+            0
+        )
+
+        recommendation = "Reorder"
+
+        explanation = (
+            f"Current stock is {int(current_stock)} units, "
+            f"while predicted demand is {int(predicted_demand)} units. "
+            f"Stock may not be sufficient for expected demand. "
+            f"Consider ordering approximately {reorder_quantity} more unit(s)."
+        )
+
+        return recommendation, explanation
+
+    # --------------------------------------------------------
+    # MONITOR STOCK
+    # --------------------------------------------------------
+
+    if days_remaining <= 5 or probability_percent >= 40:
+        recommendation = "Monitor Stock"
+
+        explanation = (
+            f"{int(current_stock)} units are currently available "
+            f"compared with predicted demand of {int(predicted_demand)} units. "
+            f"Stock is currently sufficient, but the product has "
+            f"{days_remaining} day(s) remaining before expiry. "
+            f"Monitor sales and avoid unnecessary additional purchases."
+        )
+
+        return recommendation, explanation
+
+    # --------------------------------------------------------
+    # SUFFICIENT STOCK
+    # --------------------------------------------------------
+
+    recommendation = "Sufficient Stock"
+
+    explanation = (
+        f"Current stock is {int(current_stock)} units, compared "
+        f"with predicted demand of {int(predicted_demand)} units. "
+        f"The available stock is sufficient for expected demand. "
+        f"The product has {days_remaining} day(s) remaining before expiry."
+    )
+
+    return recommendation, explanation
+
+
+def get_spoilage_risk(probability: float) -> str:
+    """
+    Convert spoilage probability to risk level.
+
+    probability is expected as decimal:
+    0.75 = 75%
+    """
+
+    probability_percent = probability * 100
+
+    if probability_percent >= 60:
+        return "High"
+
+    if probability_percent >= 30:
+        return "Medium"
+
+    return "Low"
+
+
+# ============================================================
+# HOME / HEALTH CHECK
+# ============================================================
+
+@app.get("/")
+def home():
+    return {
+        "message": "ShelfLife API is running successfully!",
+        "status": "online",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/health")
+def health_check():
+    """
+    Check whether backend and database are working.
+    """
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+
+        return {
+            "status": "healthy",
+            "backend": "online",
+            "database": "connected"
+        }
+
+    except Exception as error:
+        return {
+            "status": "unhealthy",
+            "backend": "online",
+            "database": "disconnected",
+            "error": str(error)
+        }
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# PRODUCTS API
+# ============================================================
+
+@app.get("/products")
+def get_products():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                product_id,
+                product_name,
+                category,
+                unit,
+                purchase_price,
+                selling_price,
+                shelf_life_days
+            FROM products
+            ORDER BY product_id
+        """)
+
+        rows = cursor.fetchall()
+
+        products = []
+
+        for row in rows:
+            products.append({
+                "product_id": row[0],
+                "product_name": row[1],
+                "category": row[2],
+                "unit": row[3],
+                "purchase_price": float(row[4]),
+                "selling_price": float(row[5]),
+                "shelf_life_days": int(row[6])
+            })
+
+        return products
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load products: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# INVENTORY API
+# ============================================================
+
+@app.get("/inventory")
+def get_inventory():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                i.inventory_id,
+                i.product_id,
+                p.product_name,
+                p.category,
+                i.batch_number,
+                i.quantity,
+                i.purchase_date,
+                i.expiry_date,
+                i.storage_temperature
+            FROM inventory i
+            JOIN products p
+                ON i.product_id = p.product_id
+            ORDER BY i.inventory_id
+        """)
+
+        rows = cursor.fetchall()
+
+        inventory = []
+
+        for row in rows:
+            inventory.append({
+                "inventory_id": row[0],
+                "product_id": row[1],
+                "product_name": row[2],
+                "category": row[3],
+                "batch_number": row[4],
+                "quantity": int(row[5]),
+                "purchase_date": str(row[6]),
+                "expiry_date": str(row[7]),
+                "storage_temperature": float(row[8])
+            })
+
+        return inventory
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load inventory: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# SALES API
+# ============================================================
+
+@app.get("/sales")
+def get_sales():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                s.sale_id,
+                s.product_id,
+                p.product_name,
+                p.category,
+                s.quantity_sold,
+                s.selling_price,
+                s.sale_date,
+                s.sale_time
+            FROM sales s
+            JOIN products p
+                ON s.product_id = p.product_id
+            ORDER BY s.sale_id
+        """)
+
+        rows = cursor.fetchall()
+
+        sales = []
+
+        for row in rows:
+            sales.append({
+                "sale_id": row[0],
+                "product_id": row[1],
+                "product_name": row[2],
+                "category": row[3],
+                "quantity_sold": int(row[4]),
+                "selling_price": float(row[5]),
+                "sale_date": str(row[6]),
+                "sale_time": str(row[7])
+            })
+
+        return sales
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load sales: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# SUPPLIERS API
+# ============================================================
+
+@app.get("/suppliers")
+def get_suppliers():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                supplier_id,
+                supplier_name,
+                contact_person,
+                phone,
+                email,
+                address,
+                average_delivery_days,
+                minimum_order_quantity
+            FROM suppliers
+            ORDER BY supplier_id
+        """)
+
+        rows = cursor.fetchall()
+
+        suppliers = []
+
+        for row in rows:
+            suppliers.append({
+                "supplier_id": row[0],
+                "supplier_name": row[1],
+                "contact_person": row[2],
+                "phone": row[3],
+                "email": row[4],
+                "address": row[5],
+                "average_delivery_days": int(row[6]),
+                "minimum_order_quantity": int(row[7])
+            })
+
+        return suppliers
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load suppliers: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# PURCHASE ORDERS API
+# ============================================================
+
+@app.get("/purchase-orders")
+def get_purchase_orders():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                po.purchase_order_id,
+                po.supplier_id,
+                s.supplier_name,
+                po.product_id,
+                p.product_name,
+                po.quantity_ordered,
+                po.order_date,
+                po.expected_delivery_date,
+                po.status,
+                po.unit_cost
+            FROM purchase_orders po
+            JOIN suppliers s
+                ON po.supplier_id = s.supplier_id
+            JOIN products p
+                ON po.product_id = p.product_id
+            ORDER BY po.purchase_order_id
+        """)
+
+        rows = cursor.fetchall()
+
+        purchase_orders = []
+
+        for row in rows:
+
+            quantity = int(row[5])
+            unit_cost = float(row[9])
+
+            purchase_orders.append({
+                "purchase_order_id": row[0],
+                "supplier_id": row[1],
+                "supplier_name": row[2],
+                "product_id": row[3],
+                "product_name": row[4],
+                "quantity_ordered": quantity,
+                "order_date": str(row[6]),
+                "expected_delivery_date": str(row[7]),
+                "status": row[8],
+                "unit_cost": unit_cost,
+                "total_cost": round(quantity * unit_cost, 2)
+            })
+
+        return purchase_orders
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load purchase orders: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# WEATHER API
+# ============================================================
+
+@app.get("/weather")
+def get_weather():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                weather_id,
+                location,
+                temperature,
+                humidity,
+                rainfall,
+                weather_date
+            FROM weather_data
+            ORDER BY weather_date
+        """)
+
+        rows = cursor.fetchall()
+
+        weather = []
+
+        for row in rows:
+            weather.append({
+                "weather_id": row[0],
+                "location": row[1],
+                "temperature": float(row[2]),
+                "humidity": float(row[3]),
+                "rainfall": float(row[4]),
+                "weather_date": str(row[5])
+            })
+
+        return weather
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load weather data: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# DEMAND FORECAST API
+# ============================================================
+
+@app.get("/demand-forecasts")
+def get_demand_forecasts():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                df.forecast_id,
+                df.product_id,
+                p.product_name,
+                p.category,
+                df.forecast_date,
+                df.predicted_demand,
+                df.model_name
+            FROM demand_forecasts df
+            JOIN products p
+                ON df.product_id = p.product_id
+            ORDER BY df.forecast_id
+        """)
+
+        rows = cursor.fetchall()
+
+        forecasts = []
+
+        for row in rows:
+            forecasts.append({
+                "forecast_id": row[0],
+                "product_id": row[1],
+                "product_name": row[2],
+                "category": row[3],
+                "forecast_date": str(row[4]),
+                "predicted_demand": float(row[5]),
+                "model_name": row[6]
+            })
+
+        return forecasts
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load demand forecasts: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# SPOILAGE PREDICTIONS API
+# ============================================================
+
+@app.get("/spoilage-predictions")
+def get_spoilage_predictions():
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                sp.prediction_id,
+                sp.product_id,
+                p.product_name,
+                p.category,
+                sp.inventory_id,
+                sp.prediction_date,
+                sp.days_remaining,
+                sp.spoilage_probability,
+                sp.risk_level,
+                sp.model_name
+            FROM spoilage_predictions sp
+            JOIN products p
+                ON sp.product_id = p.product_id
+            ORDER BY sp.prediction_id
+        """)
+
+        rows = cursor.fetchall()
+
+        predictions = []
+
+        for row in rows:
+            probability = float(row[7])
+
+            predictions.append({
+                "prediction_id": row[0],
+                "product_id": row[1],
+                "product_name": row[2],
+                "category": row[3],
+                "inventory_id": row[4],
+                "prediction_date": str(row[5]),
+                "days_remaining": int(row[6]),
+                "spoilage_probability": probability,
+                "risk_level": row[8],
+                "model_name": row[9]
+            })
+
+        return predictions
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load spoilage predictions: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# DASHBOARD SUMMARY API
+# ============================================================
+
+@app.get("/dashboard-summary")
+def get_dashboard_summary():
+    """
+    Provides summary values used by the Dashboard.
+    """
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        # Total products
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM products
+        """)
+
+        total_products = cursor.fetchone()[0]
+
+        # Total inventory records
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM inventory
+        """)
+
+        inventory_items = cursor.fetchone()[0]
+
+        # Risk counts
+        cursor.execute("""
+            SELECT
+                LOWER(risk_level),
+                COUNT(*)
+            FROM spoilage_predictions
+            GROUP BY LOWER(risk_level)
+        """)
+
+        risk_rows = cursor.fetchall()
+
+        high_risk = 0
+        medium_risk = 0
+        low_risk = 0
+
+        for risk, count in risk_rows:
+
+            if risk == "high":
+                high_risk = int(count)
+
+            elif risk == "medium":
+                medium_risk = int(count)
+
+            elif risk == "low":
+                low_risk = int(count)
+
+        return {
+            "total_products": total_products,
+            "inventory_items": inventory_items,
+            "high_spoilage_risk": high_risk,
+            "medium_risk": medium_risk,
+            "low_risk": low_risk,
+            "risk_summary": {
+                "high": high_risk,
+                "medium": medium_risk,
+                "low": low_risk
+            }
+        }
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load dashboard summary: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# INVENTORY INTELLIGENCE API
+# ============================================================
+
+@app.get("/inventory-intelligence")
+def get_inventory_intelligence():
+    """
+    Combines:
+
+    Products
+    + Inventory
+    + Demand Forecast
+    + Spoilage Prediction
+
+    to generate the final inventory recommendation.
+    """
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT
+                i.inventory_id,
+                i.product_id,
+                p.product_name,
+                i.quantity,
+                i.expiry_date,
+
+                COALESCE(
+                    (
+                        SELECT df.predicted_demand
+                        FROM demand_forecasts df
+                        WHERE df.product_id = i.product_id
+                        ORDER BY df.forecast_date DESC
+                        LIMIT 1
+                    ),
+                    0
+                ) AS predicted_demand,
+
+                COALESCE(
+                    (
+                        SELECT sp.spoilage_probability
+                        FROM spoilage_predictions sp
+                        WHERE sp.product_id = i.product_id
+                        AND sp.inventory_id = i.inventory_id
+                        ORDER BY sp.prediction_date DESC
+                        LIMIT 1
+                    ),
+                    0
+                ) AS spoilage_probability
+
+            FROM inventory i
+
+            JOIN products p
+                ON i.product_id = p.product_id
+
+            ORDER BY i.inventory_id
+        """)
+
+        rows = cursor.fetchall()
+
+        intelligence = []
+
+        for row in rows:
+
+            inventory_id = row[0]
+            product_id = row[1]
+            product_name = row[2]
+            current_stock = float(row[3])
+            expiry_date = row[4]
+            predicted_demand = float(row[5])
+            spoilage_probability = float(row[6])
+
+            # ------------------------------------------------
+            # Days remaining
+            # ------------------------------------------------
+
+            days_remaining = days_until_expiry(expiry_date)
+
+            # ------------------------------------------------
+            # Risk
+            # ------------------------------------------------
+
+            risk_level = get_spoilage_risk(
+                spoilage_probability
+            )
+
+            # ------------------------------------------------
+            # Health score
+            # ------------------------------------------------
+
+            score = calculate_health_score(
+                current_stock=current_stock,
+                predicted_demand=predicted_demand,
+                days_remaining=days_remaining,
+                spoilage_probability=spoilage_probability
+            )
+
+            status = health_status(score)
+
+            # ------------------------------------------------
+            # Recommendation
+            # ------------------------------------------------
+
+            recommendation, explanation = get_recommendation(
+                current_stock=current_stock,
+                predicted_demand=predicted_demand,
+                days_remaining=days_remaining,
+                spoilage_probability=spoilage_probability
+            )
+
+            intelligence.append({
+
+                "inventory_id": inventory_id,
+
+                "product_id": product_id,
+
+                "product_name": product_name,
+
+                "current_stock": int(current_stock),
+
+                "predicted_demand": int(predicted_demand),
+
+                "expiry_date": str(expiry_date),
+
+                "days_remaining": days_remaining,
+
+                "spoilage_probability": round(
+                    spoilage_probability,
+                    2
+                ),
+
+                "spoilage_probability_percent": round(
+                    spoilage_probability * 100,
+                    1
+                ),
+
+                "risk_level": risk_level,
+
+                "health_score": score,
+
+                "health_status": status,
+
+                "recommendation": recommendation,
+
+                "ai_explanation": explanation
+            })
+
+        return intelligence
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate inventory intelligence: {str(error)}"
+        )
+
+    finally:
+        close_database(connection, cursor)
+
+
+# ============================================================
+# INVENTORY INTELLIGENCE SUMMARY
+# ============================================================
+
+@app.get("/inventory-intelligence-summary")
+def get_inventory_intelligence_summary():
+    """
+    Provides counts for:
+
+    Urgent Clearance
+    Sell Quickly
+    Reorder
+    Monitor
+    Sufficient
+    """
+
+    try:
+
+        data = get_inventory_intelligence()
+
+        urgent_clearance = 0
+        sell_quickly = 0
+        reorder = 0
+        monitor = 0
+        sufficient = 0
+
+        for item in data:
+
+            recommendation = item["recommendation"]
+
+            if recommendation == "Urgent Clearance":
+                urgent_clearance += 1
+
+            elif recommendation == "Sell Quickly":
+                sell_quickly += 1
+
+            elif recommendation == "Reorder":
+                reorder += 1
+
+            elif recommendation == "Monitor Stock":
+                monitor += 1
+
+            elif recommendation == "Sufficient Stock":
+                sufficient += 1
+
+        return {
+            "urgent_clearance": urgent_clearance,
+            "sell_quickly": sell_quickly,
+            "reorder": reorder,
+            "monitor": monitor,
+            "sufficient": sufficient,
+            "total": len(data)
+        }
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate intelligence summary: {str(error)}"
+        )
+
+
+# ============================================================
+# SERVER START MESSAGE
+# ============================================================
+
+if __name__ == "__main__":
+
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=True
+    )
