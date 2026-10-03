@@ -9,6 +9,7 @@ import ForecastView from "./components/ForecastView";
 import IntelligenceView from "./components/IntelligenceView";
 import AddProductModal from "./components/AddProductModal";
 import AddInventoryModal from "./components/AddInventoryModal";
+import RecordSaleModal from "./components/RecordSaleModal";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -44,6 +45,13 @@ function App() {
   // Modals state
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
+  const [isRecordSaleOpen, setIsRecordSaleOpen] = useState(false);
+  const [selectedSaleProductId, setSelectedSaleProductId] = useState(null);
+
+  const handleOpenRecordSale = (productId = null) => {
+    setSelectedSaleProductId(productId);
+    setIsRecordSaleOpen(true);
+  };
 
   /* =========================================================
      FETCH DATA FROM FASTAPI BACKEND
@@ -165,6 +173,19 @@ function App() {
           </div>
 
           <div className="header-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => handleOpenRecordSale(null)}
+              style={{
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                fontWeight: 700,
+                boxShadow: "0 4px 12px rgba(16, 185, 129, 0.4)",
+              }}
+              title="Record a customer sale & automatically deduct stock via FEFO"
+            >
+              🛒 Record Sale (POS)
+            </button>
+
             <div className="status-pill">
               <span className={`pulse-dot ${backendOnline ? "" : "offline"}`} />
               {backendOnline ? "API & PostgreSQL Live (:8000)" : "API Disconnected"}
@@ -271,6 +292,7 @@ function App() {
                 intelligenceData={intelligenceData}
                 onNavigate={setActivePage}
                 onRefresh={() => loadData(true)}
+                onOpenRecordSale={handleOpenRecordSale}
                 showToast={showToast}
               />
             )}
@@ -278,8 +300,10 @@ function App() {
             {activePage === "products" && (
               <ProductsView
                 products={products}
+                inventory={inventory}
                 suppliers={suppliers}
                 onOpenAddModal={() => setIsAddProductOpen(true)}
+                onOpenRecordSale={handleOpenRecordSale}
                 showToast={showToast}
               />
             )}
@@ -288,7 +312,10 @@ function App() {
               <InventoryView
                 inventory={inventory}
                 onOpenAddBatch={() => setIsAddInventoryOpen(true)}
+                onOpenRecordSale={handleOpenRecordSale}
+                onRefresh={() => loadData(true)}
                 showToast={showToast}
+                API={API}
               />
             )}
 
@@ -343,6 +370,17 @@ function App() {
         }}
         products={products}
         API={API}
+      />
+
+      <RecordSaleModal
+        isOpen={isRecordSaleOpen}
+        onClose={() => setIsRecordSaleOpen(false)}
+        products={products}
+        inventory={inventory}
+        onSaleCompleted={() => loadData(true)}
+        initialProductId={selectedSaleProductId}
+        API={API}
+        showToast={showToast}
       />
     </div>
   );

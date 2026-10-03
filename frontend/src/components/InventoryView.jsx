@@ -1,10 +1,22 @@
 import { useState, useMemo } from "react";
+import AdjustStockModal from "./AdjustStockModal";
 
-export default function InventoryView({ inventory, onOpenAddBatch, showToast }) {
+export default function InventoryView({
+  inventory = [],
+  onOpenAddBatch,
+  onOpenRecordSale,
+  onRefresh,
+  showToast,
+  API = "http://127.0.0.1:8000",
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortField, setSortField] = useState("daysRemaining");
-  const [sortDirection, setSortDirection] = useState("asc"); // 'asc' or 'desc'
+  const [sortDirection, setSortDirection] = useState("asc");
+
+  // Stock adjustment modal state
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [selectedBatchForAdjust, setSelectedBatchForAdjust] = useState(null);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -61,6 +73,11 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
     }
   };
 
+  const handleOpenAdjust = (batch) => {
+    setSelectedBatchForAdjust(batch);
+    setIsAdjustModalOpen(true);
+  };
+
   const processedInventory = useMemo(() => {
     return enrichedInventory
       .filter((item) => {
@@ -94,10 +111,22 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
         <div>
           <h2 className="page-title">Perishable Inventory Batches</h2>
           <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13.5 }}>
-            Batch-level lifecycle tracking with cold-chain storage logging and expiry timelines.
+            Batch-level lifecycle tracking with cold-chain storage logging, expiry timelines, and manual adjustments.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => onOpenRecordSale && onOpenRecordSale()}
+            style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+            }}
+            title="Record customer sale & deduct stock via FEFO"
+          >
+            🛒 Record Sale (POS)
+          </button>
           <a
             href="http://127.0.0.1:8000/reports/inventory-audit.csv"
             download="shelflife_inventory_audit.csv"
@@ -106,7 +135,7 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
           >
             📥 Export Audit CSV
           </a>
-          <button className="btn btn-primary" onClick={onOpenAddBatch}>
+          <button className="btn btn-secondary" onClick={onOpenAddBatch}>
             + Add Inventory Batch
           </button>
         </div>
@@ -222,12 +251,13 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
                   Days Left {sortField === "daysRemaining" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                 </th>
                 <th>Status</th>
+                <th style={{ textAlign: "center" }}>Stock Actions</th>
               </tr>
             </thead>
             <tbody>
               {processedInventory.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center", padding: 30, color: "#64748b" }}>
+                  <td colSpan="10" style={{ textAlign: "center", padding: 30, color: "#64748b" }}>
                     No inventory batches match your active search or filters.
                   </td>
                 </tr>
@@ -280,6 +310,31 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
                           {item.statusLabel}
                         </span>
                       </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => handleOpenAdjust(item)}
+                            style={{ padding: "4px 8px", fontSize: 11.5 }}
+                            title="Adjust batch units or discard spoiled/damaged items"
+                          >
+                            ⚡ Adjust
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => onOpenRecordSale && onOpenRecordSale(item.product_id)}
+                            disabled={item.quantity <= 0}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: 11.5,
+                              background: item.quantity > 0 ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "#cbd5e1",
+                            }}
+                            title="Sell units of this product"
+                          >
+                            🛒 Sell
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -288,6 +343,17 @@ export default function InventoryView({ inventory, onOpenAddBatch, showToast }) 
           </table>
         </div>
       </div>
+
+      <AdjustStockModal
+        isOpen={isAdjustModalOpen}
+        onClose={() => setIsAdjustModalOpen(false)}
+        batch={selectedBatchForAdjust}
+        onBatchUpdated={() => {
+          if (onRefresh) onRefresh();
+        }}
+        API={API}
+        showToast={showToast}
+      />
     </>
   );
 }

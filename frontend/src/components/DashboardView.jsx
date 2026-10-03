@@ -9,6 +9,7 @@ export default function DashboardView({
   intelligenceData,
   onNavigate,
   onRefresh,
+  onOpenRecordSale,
   showToast,
 }) {
   const [financialData, setFinancialData] = useState(null);
@@ -171,7 +172,19 @@ export default function DashboardView({
             Automated monitoring of perishable capital, predictive spoilage, and rule-based decision support.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => onOpenRecordSale && onOpenRecordSale()}
+            style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+            }}
+            title="Record customer sale & deduct stock via FEFO"
+          >
+            🛒 Record Sale (POS)
+          </button>
           <button
             className="btn btn-secondary"
             onClick={() => setIsClearanceModalOpen(true)}
@@ -401,13 +414,27 @@ export default function DashboardView({
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-secondary"
-                        onClick={() => setIsClearanceModalOpen(true)}
-                        style={{ padding: "4px 10px", fontSize: 11.5 }}
-                      >
-                        ⚡ Markdown
-                      </button>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => onOpenRecordSale && onOpenRecordSale(item.product_id)}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: 11.5,
+                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                          }}
+                          title="Record customer sale for this item"
+                        >
+                          🛒 Sell
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setIsClearanceModalOpen(true)}
+                          style={{ padding: "4px 8px", fontSize: 11.5 }}
+                        >
+                          ⚡ Markdown
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

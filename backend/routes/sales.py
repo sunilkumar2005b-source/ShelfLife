@@ -68,7 +68,21 @@ def record_sale(sale: SaleCreate):
             product_name, category, catalog_price = prod
             actual_price = sale.selling_price if sale.selling_price is not None else float(catalog_price)
 
-            # Insert sale
+            # Check total available inventory stock for this product
+            cursor.execute("""
+                SELECT COALESCE(SUM(quantity), 0)
+                FROM inventory
+                WHERE product_id = %s AND quantity > 0
+            """, (sale.product_id,))
+            total_available = cursor.fetchone()[0]
+
+            if total_available < sale.quantity_sold:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Insufficient inventory stock. Only {total_available} unit(s) available across active batches."
+                )
+
+            # Insert sale transaction
             cursor.execute("""
                 INSERT INTO sales (
                     product_id,
@@ -100,17 +114,27 @@ def record_sale(sale: SaleCreate):
             ))
             row = cursor.fetchone()
 
-            # Optional FIFO deduction from oldest unexpired inventory batch if available
+            # Multi-batch FEFO (First-Expired, First-Out) inventory deduction
+            # Batches closest to expiry are sold/deducted first to minimize store spoilage loss
+            remaining_to_deduct = sale.quantity_sold
             cursor.execute("""
-                UPDATE inventory
-                SET quantity = GREATEST(quantity - %s, 0)
-                WHERE inventory_id = (
-                    SELECT inventory_id FROM inventory
-                    WHERE product_id = %s AND quantity > 0
-                    ORDER BY expiry_date ASC
-                    LIMIT 1
-                )
-            """, (sale.quantity_sold, sale.product_id))
+                SELECT inventory_id, quantity
+                FROM inventory
+                WHERE product_id = %s AND quantity > 0
+                ORDER BY expiry_date ASC, inventory_id ASC
+            """, (sale.product_id,))
+            candidate_batches = cursor.fetchall()
+
+            for batch_id, batch_qty in candidate_batches:
+                if remaining_to_deduct <= 0:
+                    break
+                qty_to_sub = min(batch_qty, remaining_to_deduct)
+                cursor.execute("""
+                    UPDATE inventory
+                    SET quantity = quantity - %s
+                    WHERE inventory_id = %s
+                """, (qty_to_sub, batch_id))
+                remaining_to_deduct -= qty_to_sub
 
             return {
                 "sale_id": row[0],

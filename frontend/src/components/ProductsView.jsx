@@ -1,6 +1,12 @@
 import { useState, useMemo } from "react";
 
-export default function ProductsView({ products, suppliers, onOpenAddModal }) {
+export default function ProductsView({
+  products = [],
+  inventory = [],
+  suppliers = [],
+  onOpenAddModal,
+  onOpenRecordSale,
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortField, setSortField] = useState("product_name");
@@ -9,6 +15,14 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
   const categories = useMemo(() => {
     return ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
   }, [products]);
+
+  // Compute on-hand stock per product
+  const stockByProductId = useMemo(() => {
+    return inventory.reduce((acc, item) => {
+      acc[item.product_id] = (acc[item.product_id] || 0) + (Number(item.quantity) || 0);
+      return acc;
+    }, {});
+  }, [inventory]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -33,9 +47,11 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
         const purchase = Number(p.purchase_price) || 0;
         const selling = Number(p.selling_price) || 0;
         const marginPct = selling > 0 ? Math.round(((selling - purchase) / selling) * 100) : 0;
+        const onHand = stockByProductId[p.product_id] || 0;
         return {
           ...p,
           marginPct,
+          onHand,
           supplierName: getSupplierName(p),
         };
       })
@@ -57,7 +73,7 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
         if (valA > valB) return sortDirection === "asc" ? 1 : -1;
         return 0;
       });
-  }, [products, searchTerm, selectedCategory, sortField, sortDirection, suppliers]);
+  }, [products, stockByProductId, searchTerm, selectedCategory, sortField, sortDirection, suppliers]);
 
   return (
     <>
@@ -65,12 +81,26 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
         <div>
           <h2 className="page-title">Perishable Products Catalog</h2>
           <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13.5 }}>
-            Master perishable catalog with procurement costs, target retail margins, and shelf life parameters.
+            Master perishable catalog with procurement costs, target retail margins, stock levels, and POS sales.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={onOpenAddModal}>
-          + Add New Product
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => onOpenRecordSale && onOpenRecordSale()}
+            style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+            }}
+            title="Record customer sale & deduct stock via FEFO"
+          >
+            🛒 Record Sale (POS)
+          </button>
+          <button className="btn btn-secondary" onClick={onOpenAddModal}>
+            + Add New Product
+          </button>
+        </div>
       </div>
 
       {/* Category Filter Pills */}
@@ -137,6 +167,9 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
                 <th className="sortable" onClick={() => handleSort("category")}>
                   Category {sortField === "category" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                 </th>
+                <th className="sortable" onClick={() => handleSort("onHand")}>
+                  Stock On-Hand {sortField === "onHand" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+                </th>
                 <th>Unit</th>
                 <th className="sortable" onClick={() => handleSort("purchase_price")}>
                   Cost Price {sortField === "purchase_price" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
@@ -145,18 +178,19 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
                   Selling Price {sortField === "selling_price" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                 </th>
                 <th className="sortable" onClick={() => handleSort("marginPct")}>
-                  Retail Margin {sortField === "marginPct" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+                  Margin {sortField === "marginPct" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                 </th>
                 <th className="sortable" onClick={() => handleSort("shelf_life_days")}>
                   Shelf Life {sortField === "shelf_life_days" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
                 </th>
-                <th>Primary Supplier</th>
+                <th>Supplier</th>
+                <th style={{ textAlign: "center" }}>POS Action</th>
               </tr>
             </thead>
             <tbody>
               {processedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center", padding: 30, color: "#64748b" }}>
+                  <td colSpan="11" style={{ textAlign: "center", padding: 30, color: "#64748b" }}>
                     No products matching your search or category selection.
                   </td>
                 </tr>
@@ -175,6 +209,12 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
                       <span className="badge" style={{ background: "#f1f5f9", color: "#334155" }}>
                         {p.category}
                       </span>
+                    </td>
+                    <td>
+                      <strong style={{ color: p.onHand > 0 ? "#059669" : "#dc2626" }}>
+                        {p.onHand}
+                      </strong>{" "}
+                      <span style={{ fontSize: 12, color: "#64748b" }}>units</span>
                     </td>
                     <td style={{ color: "#64748b" }}>{p.unit}</td>
                     <td>₹{Number(p.purchase_price).toFixed(2)}</td>
@@ -199,6 +239,22 @@ export default function ProductsView({ products, suppliers, onOpenAddModal }) {
                       </span>
                     </td>
                     <td style={{ fontSize: 12.5, color: "#475569" }}>{p.supplierName}</td>
+                    <td style={{ textAlign: "center" }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => onOpenRecordSale && onOpenRecordSale(p.product_id)}
+                        disabled={p.onHand <= 0}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          background: p.onHand > 0 ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "#cbd5e1",
+                          cursor: p.onHand > 0 ? "pointer" : "not-allowed",
+                        }}
+                        title={p.onHand > 0 ? "Sell units of this product" : "Out of stock"}
+                      >
+                        🛒 Sell
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
