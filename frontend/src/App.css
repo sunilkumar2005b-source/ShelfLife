@@ -5,114 +5,346 @@
 ========================================================= */
 
 /* ---------------------------------------------------------
-   1. GLOBAL WRAPPER & LAYOUT
+   1. GLOBAL WRAPPER & LAYOUT ARCHITECTURE
 --------------------------------------------------------- */
-.app {
+.app-layout {
   min-height: 100vh;
   width: 100%;
   display: flex;
-  flex-direction: column;
   background: #f8fafc;
   color: #0f172a;
 }
 
-main {
+/* ---------------------------------------------------------
+   2. ENTERPRISE VERTICAL SIDEBAR
+--------------------------------------------------------- */
+.app-sidebar {
+  width: 270px;
+  min-width: 270px;
+  max-width: 270px;
+  background: linear-gradient(180deg, #052e22 0%, #063d2e 60%, #031e16 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 24px 16px 20px;
+  box-shadow: 4px 0 24px rgba(5, 46, 34, 0.15);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+}
+
+.sidebar-brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  flex-shrink: 0;
+}
+
+.sidebar-brand-text h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+
+.sidebar-brand-text span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a7f3d0;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.sidebar-action-wrap {
+  margin-bottom: 20px;
+}
+
+.sidebar-pos-btn {
   width: 100%;
-  max-width: 1520px;
-  margin: 0 auto;
-  padding: 30px 32px 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13.5px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-pos-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+}
+
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6ee7b7;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0 10px;
+  margin-bottom: 8px;
+  opacity: 0.85;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #d1fae5;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.18s ease;
+  width: 100%;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.sidebar-nav-item.active {
+  background: linear-gradient(135deg, #0d9488 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border-color: rgba(45, 212, 191, 0.4) !important;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35) !important;
+}
+
+.sidebar-nav-icon {
+  display: flex;
+  align-items: center;
+  color: #6ee7b7;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-item.active .sidebar-nav-icon {
+  color: #ffffff;
+}
+
+.sidebar-nav-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.badge-neutral {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.badge-danger {
+  background: #e11d48;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(225, 29, 72, 0.6);
+}
+
+.sidebar-footer {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-telemetry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.telemetry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #a7f3d0;
+}
+
+.telemetry-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.telemetry-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.telemetry-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+.sidebar-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
 }
 
 /* ---------------------------------------------------------
-   2. EXECUTIVE HEADER & BRAND BAR
+   3. WORKSPACE & TOPBAR
 --------------------------------------------------------- */
-.header {
-  background: linear-gradient(135deg, #052e22 0%, #0d3b2e 50%, #134e40 100%);
-  color: #ffffff;
-  padding: 22px 36px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 20px -2px rgba(13, 59, 46, 0.35);
-  position: relative;
-  z-index: 10;
+.app-workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f8fafc;
 }
 
-.header-top {
-  max-width: 1520px;
-  margin: 0 auto;
+
+
+.workspace-topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 36px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
-.header-brand {
+.topbar-left {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
-.header-brand-title {
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.breadcrumb-root {
+  color: #059669;
+}
+
+.breadcrumb-sep {
+  color: #cbd5e1;
+}
+
+.breadcrumb-active {
+  color: #475569;
+}
+
+.topbar-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+}
+
+.topbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.header-brand h1 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.6px;
-  background: linear-gradient(120deg, #ffffff 0%, #d1fae5 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.topbar-pos-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35) !important;
 }
 
-.header-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  background: rgba(16, 185, 129, 0.2);
-  color: #a7f3d0;
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  text-transform: uppercase;
-}
-
-.header-brand p {
-  margin: 0;
-  font-size: 13.5px;
-  color: #a7f3d0;
-  font-weight: 450;
-  letter-spacing: 0.1px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+.workspace-content {
+  flex: 1;
+  padding: 28px 36px 60px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
 .status-pill {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.25);
+  background: #f1f5f9;
   padding: 7px 14px;
   border-radius: 9999px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(4px);
+  color: #334155;
+  border: 1px solid #e2e8f0;
 }
 
 .pulse-dot {
@@ -135,74 +367,8 @@ main {
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
-/* ---------------------------------------------------------
-   3. ENTERPRISE NAVIGATION BAR
---------------------------------------------------------- */
-.navbar {
-  background: #ffffff;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 36px;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
-  overflow-x: auto;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.navbar-inner {
-  max-width: 1520px;
-  width: 100%;
-  margin: 0 auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.navbar button {
-  border: 1px solid transparent;
-  background: transparent;
-  padding: 9px 16px;
-  border-radius: 8px;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  color: #475569;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.navbar button:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-.navbar button.active {
-  background: #ecfdf5;
-  color: #065f46;
-  border-color: #a7f3d0;
-  box-shadow: 0 1px 2px 0 rgba(16, 185, 129, 0.1);
-  font-weight: 700;
-}
-
-.nav-counter {
-  padding: 2px 7px;
-  border-radius: 9999px;
-  font-size: 11px;
-  background: #e2e8f0;
-  color: #334155;
-  font-weight: 700;
-}
-
-.navbar button.active .nav-counter {
-  background: #10b981;
-  color: #ffffff;
+.spin-icon {
+  animation: spinnerRotate 1s linear infinite;
 }
 
 /* ---------------------------------------------------------
@@ -835,18 +1001,30 @@ tbody tr:last-child td {
   color: #ffffff;
 }
 
+.modal-dialog form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-body {
-  padding: 24px;
+  padding: 20px 24px;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .modal-footer {
-  padding: 16px 24px;
+  padding: 14px 24px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .form-group {
@@ -974,15 +1152,42 @@ tbody tr:last-child td {
 /* ---------------------------------------------------------
    17. RESPONSIVE BREAKPOINTS
 --------------------------------------------------------- */
-@media (max-width: 900px) {
-  main {
+@media (max-width: 960px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .app-sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 16px 20px;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .sidebar-nav-item {
+    width: auto;
+    flex: 1 1 calc(50% - 6px);
+  }
+  .workspace-topbar {
+    padding: 14px 20px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .topbar-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .workspace-content {
     padding: 20px 16px;
-  }
-  .header {
-    padding: 18px 20px;
-  }
-  .navbar {
-    padding: 8px 16px;
   }
   .cards {
     grid-template-columns: 1fr 1fr;
@@ -993,11 +1198,14 @@ tbody tr:last-child td {
 }
 
 @media (max-width: 600px) {
+  .sidebar-nav-item {
+    flex: 1 1 100%;
+  }
   .cards {
     grid-template-columns: 1fr;
   }
-  .header-brand h1 {
-    font-size: 22px;
+  .topbar-title {
+    font-size: 18px;
   }
   .financial-grid {
     grid-template-columns: 1fr;

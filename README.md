@@ -16,15 +16,15 @@ Perishable products (dairy, vegetables, fruits, bakery, meat) experience aggress
 
 ## 2. Key Capabilities & Engineering Features
 
-- 📊 **Executive Command Center:** Real-time visibility into active stock, imminent expiries, spoilage exposure, and composite inventory health.
-- 🎓 **Faculty Demonstration Scenarios:** Instant stress simulation of extreme weather shocks (*Heatwave 41.5°C*), demand spikes (*Stockout Crisis*), and bulk expiration waves (*Urgent Clearance*).
-- 🔬 **Supervised Machine Learning:**
+- **Executive Command Center:** Real-time visibility into active stock, imminent expiries, spoilage exposure, and composite inventory health.
+- **Faculty Demonstration Scenarios:** Instant stress simulation of extreme weather shocks (*Heatwave 41.5°C*), demand spikes (*Stockout Crisis*), and bulk expiration waves (*Urgent Clearance*).
+- **Supervised Machine Learning:**
   - **Demand Forecasting:** Ridge Regression ($L_2$ Regularized, $\alpha=1.0$) predicting continuous consumer demand units (MAE: 19.45, RMSE: 22.75 units).
   - **Spoilage Risk Radar:** Cost-Sensitive Logistic Regression calculating batch degradation probabilities (88.89% Accuracy, 96.03% High-Risk Recall).
-- 🧠 **Deterministic Decision Engine:** Calculates a 0–100 composite **Inventory Health Score** and outputs prescriptive interventions: *Urgent Clearance*, *Sell Quickly*, *Reorder*, *Monitor Stock*, or *Sufficient Stock*.
-- 💰 **Financial Valuation & Markdown Simulator:** Live assessment of capital at risk and interactive promotional salvage modeling.
-- 📥 **Enterprise CSV Audits:** Streaming export of full inventory audits and degradation assessments.
-- 🧪 **100% Automated Test Coverage:** 33 unit and integration tests verifying APIs, ML pipelines, heuristics, and reports.
+- **Deterministic Decision Engine:** Calculates a 0–100 composite **Inventory Health Score** and outputs prescriptive interventions: *Urgent Clearance*, *Sell Quickly*, *Reorder*, *Monitor Stock*, or *Sufficient Stock*.
+- **Financial Valuation & Markdown Simulator:** Live assessment of capital at risk and interactive promotional salvage modeling.
+- **Enterprise CSV Audits:** Streaming export of full inventory audits and degradation assessments.
+- **100% Automated Test Coverage:** 33 unit and integration tests verifying APIs, ML pipelines, heuristics, and reports.
 
 ---
 
@@ -152,7 +152,7 @@ Interactive Swagger UI: **`http://127.0.0.1:8000/docs`**
 ## 8. Faculty Defense Guide
 
 A complete, formal academic defense manual is provided at:  
-👉 **[`docs/defense/faculty-defense-guide.md`](docs/defense/faculty-defense-guide.md)**
+- **[`docs/defense/faculty-defense-guide.md`](docs/defense/faculty-defense-guide.md)**
 
 It includes:
 - **Mathematical Formulations:** KaTeX-rendered equations for Ridge $L_2$ penalties, Logistic binary cross-entropy, and the composite inventory health formula.

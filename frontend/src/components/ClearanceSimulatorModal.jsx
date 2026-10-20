@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import API_BASE from "../apiConfig";
 
 export default function ClearanceSimulatorModal({ isOpen, onClose }) {
   const [discountPercent, setDiscountPercent] = useState(30);
@@ -10,7 +11,7 @@ export default function ClearanceSimulatorModal({ isOpen, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("http://127.0.0.1:8000/reports/simulate-clearance", {
+      const response = await fetch(`${API_BASE}/reports/simulate-clearance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discount_percent: Number(discount) }),
@@ -38,7 +39,7 @@ export default function ClearanceSimulatorModal({ isOpen, onClose }) {
       <div className="modal-content" style={{ maxWidth: 640 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: 18, color: "#1e293b" }}>
-            💰 Promotional Clearance Markdown Simulator
+            Promotional Clearance Markdown Simulator
           </h3>
           <button
             onClick={onClose}
@@ -90,11 +91,11 @@ export default function ClearanceSimulatorModal({ isOpen, onClose }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: 10, borderRadius: 6 }}>
                 <div style={{ fontSize: 11, color: "#991b1b", fontWeight: 600 }}>Unmitigated Cost Loss</div>
-                <div style={{ fontSize: 18, color: "#991b1b", fontWeight: 800 }}>${result.unmitigated_cost_loss.toFixed(2)}</div>
+                <div style={{ fontSize: 18, color: "#991b1b", fontWeight: 800 }}>₹{result.unmitigated_cost_loss.toFixed(2)}</div>
               </div>
               <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: 10, borderRadius: 6 }}>
                 <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>Salvaged Revenue</div>
-                <div style={{ fontSize: 18, color: "#166534", fontWeight: 800 }}>${result.estimated_discounted_revenue_recovered.toFixed(2)}</div>
+                <div style={{ fontSize: 18, color: "#166534", fontWeight: 800 }}>₹{result.estimated_discounted_revenue_recovered.toFixed(2)}</div>
               </div>
               <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: 10, borderRadius: 6 }}>
                 <div style={{ fontSize: 11, color: "#1e40af", fontWeight: 600 }}>Batches Rescued</div>
@@ -118,9 +119,9 @@ export default function ClearanceSimulatorModal({ isOpen, onClose }) {
                     <tr key={item.inventory_id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "6px 10px" }}><strong>{item.product_name}</strong></td>
                       <td style={{ padding: "6px 10px" }}>{item.quantity}</td>
-                      <td style={{ padding: "6px 10px", color: "#64748b", textDecoration: "line-through" }}>${item.original_price}</td>
-                      <td style={{ padding: "6px 10px", color: "#166534", fontWeight: 700 }}>${item.discounted_price}</td>
-                      <td style={{ padding: "6px 10px", fontWeight: 600 }}>${item.recovered_revenue}</td>
+                      <td style={{ padding: "6px 10px", color: "#64748b", textDecoration: "line-through" }}>₹{item.original_price}</td>
+                      <td style={{ padding: "6px 10px", color: "#166534", fontWeight: 700 }}>₹{item.discounted_price}</td>
+                      <td style={{ padding: "6px 10px", fontWeight: 600 }}>₹{item.recovered_revenue}</td>
                     </tr>
                   ))}
                 </tbody>

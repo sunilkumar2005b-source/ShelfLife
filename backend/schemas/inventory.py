@@ -34,6 +34,8 @@ class InventoryResponse(BaseModel):
     purchase_date: Optional[str] = None
     expiry_date: str
     storage_temperature: Optional[float] = None
+    unit: Optional[str] = None
+    days_remaining: Optional[int] = None
 
     class Config:
         from_attributes = True

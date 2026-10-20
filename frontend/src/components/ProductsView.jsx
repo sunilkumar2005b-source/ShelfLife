@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { CartIcon, PlusIcon } from "./Icons";
 
 export default function ProductsView({
   products = [],
@@ -6,6 +7,7 @@ export default function ProductsView({
   suppliers = [],
   onOpenAddModal,
   onOpenRecordSale,
+  onOpenAddBatch,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -16,10 +18,17 @@ export default function ProductsView({
     return ["all", ...new Set(products.map((p) => p.category).filter(Boolean))];
   }, [products]);
 
-  // Compute on-hand stock per product
+  // Compute on-hand stock and batch count per product
   const stockByProductId = useMemo(() => {
     return inventory.reduce((acc, item) => {
       acc[item.product_id] = (acc[item.product_id] || 0) + (Number(item.quantity) || 0);
+      return acc;
+    }, {});
+  }, [inventory]);
+
+  const batchCountByProductId = useMemo(() => {
+    return inventory.reduce((acc, item) => {
+      acc[item.product_id] = (acc[item.product_id] || 0) + 1;
       return acc;
     }, {});
   }, [inventory]);
@@ -48,10 +57,12 @@ export default function ProductsView({
         const selling = Number(p.selling_price) || 0;
         const marginPct = selling > 0 ? Math.round(((selling - purchase) / selling) * 100) : 0;
         const onHand = stockByProductId[p.product_id] || 0;
+        const batchCount = batchCountByProductId[p.product_id] || 0;
         return {
           ...p,
           marginPct,
           onHand,
+          batchCount,
           supplierName: getSupplierName(p),
         };
       })
@@ -77,13 +88,7 @@ export default function ProductsView({
 
   return (
     <>
-      <div className="table-toolbar">
-        <div>
-          <h2 className="page-title">Perishable Products Catalog</h2>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13.5 }}>
-            Master perishable catalog with procurement costs, target retail margins, stock levels, and POS sales.
-          </p>
-        </div>
+      <div className="table-toolbar" style={{ justifyContent: "flex-end", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10 }}>
           <button
             className="btn btn-primary"
@@ -92,13 +97,16 @@ export default function ProductsView({
               background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
               fontWeight: 700,
               boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
             title="Record customer sale & deduct stock via FEFO"
           >
-            🛒 Record Sale (POS)
+            <CartIcon size={15} /> Record Sale (POS)
           </button>
-          <button className="btn btn-secondary" onClick={onOpenAddModal}>
-            + Add New Product
+          <button className="btn btn-secondary" onClick={onOpenAddModal} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <PlusIcon size={14} /> Add New Product
           </button>
         </div>
       </div>
@@ -123,7 +131,7 @@ export default function ProductsView({
             <input
               type="text"
               className="search-input"
-              placeholder="🔍 Search product title..."
+              placeholder="Search product title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ width: "100%", paddingRight: searchTerm ? 32 : 14 }}
@@ -144,7 +152,7 @@ export default function ProductsView({
                 }}
                 title="Clear search"
               >
-                ✕
+                &times;
               </button>
             )}
           </div>
@@ -211,10 +219,27 @@ export default function ProductsView({
                       </span>
                     </td>
                     <td>
-                      <strong style={{ color: p.onHand > 0 ? "#059669" : "#dc2626" }}>
-                        {p.onHand}
-                      </strong>{" "}
-                      <span style={{ fontSize: 12, color: "#64748b" }}>units</span>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                        <strong style={{ color: p.onHand > 0 ? "#059669" : "#dc2626", fontSize: 14 }}>
+                          {p.onHand}
+                        </strong>
+                        <span style={{ fontSize: 12, color: "#64748b" }}>{p.unit}</span>
+                        {p.batchCount > 1 && (
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              color: "#475569",
+                              background: "#f1f5f9",
+                              border: "1px solid #e2e8f0",
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                            }}
+                            title={`${p.batchCount} active batches in inventory`}
+                          >
+                            {p.batchCount} batches
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ color: "#64748b" }}>{p.unit}</td>
                     <td>₹{Number(p.purchase_price).toFixed(2)}</td>
@@ -245,14 +270,14 @@ export default function ProductsView({
                         onClick={() => onOpenRecordSale && onOpenRecordSale(p.product_id)}
                         disabled={p.onHand <= 0}
                         style={{
-                          padding: "4px 10px",
+                          padding: "4px 12px",
                           fontSize: 12,
                           background: p.onHand > 0 ? "linear-gradient(135deg, #10b981 0%, #059669 100%)" : "#cbd5e1",
                           cursor: p.onHand > 0 ? "pointer" : "not-allowed",
                         }}
-                        title={p.onHand > 0 ? "Sell units of this product" : "Out of stock"}
+                        title={p.onHand > 0 ? "Sell units of this product via POS" : "Out of stock"}
                       >
-                        🛒 Sell
+                        Sell
                       </button>
                     </td>
                   </tr>

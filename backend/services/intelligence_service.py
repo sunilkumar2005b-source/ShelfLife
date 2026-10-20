@@ -168,62 +168,65 @@ def get_recommendation(
 
     env_explanation = " " + " ".join(env_notes) if env_notes else ""
 
-    # RULE 1: CLEARANCE ACTION (Urgent Clearance)
-    # Trigger: Expiring within critical window AND high spoilage probability, OR excessive stock facing imminent expiry
-    if (days_remaining <= config.expiry_critical_days and prob >= config.spoilage_high_threshold) or (
-        days_remaining <= config.expiry_critical_days and current_stock > predicted_demand * config.stock_excess_multiplier
+    # RULE 1: URGENT CLEARANCE
+    # Trigger: Expiring within critical window (<=2 days), or <=3 days with high spoilage risk (>=60%), or excessive stock facing imminent expiry
+    if (
+        (days_remaining <= config.expiry_critical_days)
+        or (days_remaining <= 3 and prob >= config.spoilage_high_threshold)
+        or (days_remaining <= config.expiry_critical_days and current_stock > predicted_demand * config.stock_excess_multiplier)
     ):
-        recommendation = "Clearance Action"
+        recommendation = "Urgent Clearance"
         explanation = (
             f"Product expires in {days_remaining} day(s) with an elevated spoilage probability of {prob_percent}%. "
-            f"Current stock of {int(current_stock)} units cannot be absorbed by predicted demand of {int(predicted_demand)} units. "
+            f"Current stock of {int(current_stock)} units cannot be absorbed before shelf life lapses. "
             f"Execute an immediate promotional clearance discount to prevent total stock loss.{env_explanation}"
         )
         return recommendation, explanation
 
     # RULE 2: SELL QUICKLY
-    # Trigger: Expiry approaching within warning window AND stock exceeds predicted demand with medium/high spoilage risk
+    # Trigger: Expiry approaching within warning window (3-5 days) with medium or high spoilage risk (>=30%)
     if (
         days_remaining <= config.expiry_warning_days
         and prob >= config.spoilage_medium_threshold
-        and current_stock > predicted_demand
     ):
         recommendation = "Sell Quickly"
-        surplus = int(current_stock - predicted_demand)
         explanation = (
-            f"Inventory holds {int(current_stock)} units against predicted demand of {int(predicted_demand)} units "
-            f"({surplus} surplus units). Spoilage risk is {prob_percent}% with {days_remaining} day(s) remaining. "
-            f"Prioritize front-of-shelf positioning or bundle deals to accelerate sales before expiry.{env_explanation}"
+            f"Inventory holds {int(current_stock)} units with {days_remaining} day(s) remaining and {prob_percent}% spoilage probability. "
+            f"Prioritize front-of-shelf positioning, first-expiry-first-out (FEFO) rotation, or bundle promotions to accelerate sell-through.{env_explanation}"
         )
         return recommendation, explanation
 
     # RULE 3: REORDER
-    # Trigger: Current stock below required demand buffer
-    if current_stock < predicted_demand * config.reorder_buffer_multiplier:
+    # Trigger: Stock is below demand buffer AND remaining shelf life is safe (> warning window) with low spoilage risk
+    if (
+        current_stock < predicted_demand * config.reorder_buffer_multiplier
+        and days_remaining > config.expiry_warning_days
+        and prob < config.spoilage_medium_threshold
+    ):
         reorder_qty = max(round(predicted_demand * 1.2 - current_stock), 1)
         recommendation = "Reorder"
         explanation = (
             f"Current stock of {int(current_stock)} units is insufficient for predicted demand of {int(predicted_demand)} units. "
-            f"Shortfall risk detected. Place a replenishment purchase order for approximately {reorder_qty} unit(s).{env_explanation}"
+            f"Batch shelf life is stable ({days_remaining} days left, {prob_percent}% spoilage risk). Place a replenishment purchase order for approximately {reorder_qty} unit(s).{env_explanation}"
         )
         return recommendation, explanation
 
     # RULE 4: MONITOR STOCK
-    # Trigger: Stock is excessive OR expiry is within warning window OR spoilage risk is elevated
+    # Trigger: Shelf life in intermediate window (<=10 days) or moderate spoilage risk or adequate buffer
     if (
-        days_remaining <= config.expiry_warning_days
-        or prob >= config.spoilage_medium_threshold
+        days_remaining <= config.expiry_safe_days
+        or prob >= 0.10
         or current_stock >= predicted_demand * config.stock_excess_multiplier
     ):
-        recommendation = "Monitor"
+        recommendation = "Monitor Stock"
         explanation = (
             f"Inventory holds {int(current_stock)} units with {days_remaining} day(s) until expiry and {prob_percent}% spoilage probability. "
-            f"Stock is currently sufficient, but shelf life progression should be tracked closely.{env_explanation}"
+            f"Stock is currently sufficient; track shelf life progression and storage temperature closely.{env_explanation}"
         )
         return recommendation, explanation
 
     # RULE 5: SUFFICIENT STOCK
-    # Default healthy state
+    # Default healthy state with long shelf life and low risk
     recommendation = "Sufficient Stock"
     explanation = (
         f"Available stock of {int(current_stock)} units adequately covers predicted demand ({int(predicted_demand)} units). "

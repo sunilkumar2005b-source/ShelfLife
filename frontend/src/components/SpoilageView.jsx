@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import SpoilageSimulatorModal from "./SpoilageSimulatorModal";
+import API_BASE from "../apiConfig";
+import { DownloadIcon, SlidersIcon, RefreshIcon } from "./Icons";
 
 export default function SpoilageView({ spoilage, inventory, onRefresh, showToast }) {
   const [filterRisk, setFilterRisk] = useState("all");
@@ -14,7 +16,7 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
   const handleSync = async () => {
     try {
       setSyncing(true);
-      const res = await fetch("http://127.0.0.1:8000/ml/sync-predictions", { method: "POST" });
+      const res = await fetch(`${API_BASE}/ml/sync-predictions`, { method: "POST" });
       if (res.ok) {
         if (onRefresh) await onRefresh();
         if (showToast) showToast("Live ML predictions recalculated for all batches!", "success");
@@ -58,34 +60,32 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
 
   return (
     <>
-      <div className="table-toolbar">
-        <div>
-          <h2 className="page-title">Spoilage Risk Radar & Degradation Intelligence</h2>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13.5 }}>
-            Supervised machine learning probabilities for perishable expiration, temperature stress, and inventory loss.
-          </p>
-        </div>
+      <div className="table-toolbar" style={{ justifyContent: "flex-end", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10 }}>
           <a
-            href="http://127.0.0.1:8000/reports/spoilage-risk.csv"
+            href={`${API_BASE}/reports/spoilage-risk.csv`}
             download="shelflife_spoilage_risk.csv"
             className="btn btn-secondary"
             onClick={() => showToast && showToast("Exporting spoilage risk audit CSV...", "info")}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            📥 Export Risk CSV
+            <DownloadIcon size={14} /> Export Risk CSV
           </a>
           <button
             className="btn btn-secondary"
             onClick={() => setIsSimulatorOpen(true)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            🔬 What-If Simulator
+            <SlidersIcon size={14} /> What-If Simulator
           </button>
           <button
             className="btn btn-primary"
             onClick={handleSync}
             disabled={syncing}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            {syncing ? "Synchronizing ML..." : "⚡ Recalculate Predictions"}
+            <RefreshIcon size={14} className={syncing ? "spin-icon" : ""} />
+            {syncing ? "Synchronizing ML..." : "Recalculate Predictions"}
           </button>
         </div>
       </div>
@@ -95,7 +95,7 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
         <div>
           {isTrained ? (
             <>
-              <strong style={{ color: "#166534" }}>✓ Live ML Models Active:</strong> Degradation probabilities and risk tiers are evaluated by the trained <strong>Logistic Regression (scikit-learn)</strong> classifier (88.89% Test Accuracy, 96.03% High Spoilage Recall).
+              <strong style={{ color: "#166534" }}>Live ML Models Active:</strong> Degradation probabilities and risk tiers are evaluated by the trained <strong>Logistic Regression (scikit-learn)</strong> classifier (88.89% Test Accuracy, 96.03% High Spoilage Recall).
             </>
           ) : (
             <>
@@ -122,7 +122,7 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
           className={`btn ${filterRisk === "high" ? "btn-danger" : "btn-secondary"}`}
           style={{ fontSize: 12.5, padding: "6px 14px" }}
         >
-          🚨 High Risk (&ge; 60%)
+          High Risk (&ge; 60%)
         </button>
         <button
           onClick={() => setFilterRisk("medium")}
@@ -134,14 +134,14 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
             borderColor: filterRisk === "medium" ? "#d97706" : undefined,
           }}
         >
-          ⚠️ Medium Risk (30-59%)
+          Medium Risk (30-59%)
         </button>
         <button
           onClick={() => setFilterRisk("low")}
           className={`btn ${filterRisk === "low" ? "btn-primary" : "btn-secondary"}`}
           style={{ fontSize: 12.5, padding: "6px 14px" }}
         >
-          ✅ Low Risk (&lt; 30%)
+          Low Risk (&lt; 30%)
         </button>
       </div>
 
@@ -151,7 +151,7 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
             <input
               type="text"
               className="search-input"
-              placeholder="🔍 Search product title..."
+              placeholder="Search product title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ width: "100%", paddingRight: searchTerm ? 32 : 14 }}
@@ -172,7 +172,7 @@ export default function SpoilageView({ spoilage, inventory, onRefresh, showToast
                 }}
                 title="Clear search"
               >
-                ✕
+                &times;
               </button>
             )}
           </div>

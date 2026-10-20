@@ -38,6 +38,8 @@ class InventoryIntelligenceItem(BaseModel):
     inventory_id: int
     product_id: int
     product_name: str
+    category: Optional[str] = None
+    batch_number: Optional[str] = None
     current_stock: int
     predicted_demand: int
     expiry_date: str

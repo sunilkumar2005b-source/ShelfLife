@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import API_BASE from "../apiConfig";
 
 export default function AdjustStockModal({
   isOpen,
   onClose,
   batch = null,
   onBatchUpdated,
-  API = "http://127.0.0.1:8000",
+  API = API_BASE,
   showToast,
 }) {
   const [newQuantity, setNewQuantity] = useState(0);
@@ -79,9 +80,9 @@ export default function AdjustStockModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
         <div className="modal-header" style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)" }}>
-          <h3>⚡ Adjust / Deduct Batch Stock</h3>
+          <h3>Adjust / Deduct Batch Stock</h3>
           <button className="modal-close" onClick={onClose} title="Close">
-            ✕
+            &times;
           </button>
         </div>
 
@@ -99,17 +100,17 @@ export default function AdjustStockModal({
 
             {error && (
               <div style={{ background: "#fef2f2", color: "#991b1b", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 14, border: "1px solid #fecaca" }}>
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
             <div className="form-group">
               <label>Reason for Stock Adjustment</label>
               <select value={reason} onChange={(e) => setReason(e.target.value)}>
-                <option value="spoilage_discard">🗑️ Discard Damaged / Spoiled Units</option>
-                <option value="manual_sale">🛒 Sold Units (Direct Batch Decrement)</option>
-                <option value="stocktake_correction">📋 Physical Inventory Count Correction</option>
-                <option value="store_consumption">🍽️ In-Store Sample / Testing</option>
+                <option value="spoilage_discard">Discard Damaged / Spoiled Units</option>
+                <option value="manual_sale">Sold Units (Direct Batch Decrement)</option>
+                <option value="stocktake_correction">Physical Inventory Count Correction</option>
+                <option value="store_consumption">In-Store Sample / Testing</option>
               </select>
             </div>
 

@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 from database import get_db_cursor
@@ -21,13 +22,15 @@ def get_inventory():
                     i.quantity,
                     i.purchase_date,
                     i.expiry_date,
-                    i.storage_temperature
+                    i.storage_temperature,
+                    p.unit
                 FROM inventory i
                 JOIN products p
                     ON i.product_id = p.product_id
                 ORDER BY i.inventory_id
             """)
             rows = cursor.fetchall()
+            today = date.today()
             return [
                 {
                     "inventory_id": r[0],
@@ -38,7 +41,9 @@ def get_inventory():
                     "quantity": int(r[5]),
                     "purchase_date": str(r[6]) if r[6] is not None else None,
                     "expiry_date": str(r[7]),
-                    "storage_temperature": float(r[8]) if r[8] is not None else None
+                    "storage_temperature": float(r[8]) if r[8] is not None else None,
+                    "unit": r[9],
+                    "days_remaining": max((r[7] - today).days, 0) if r[7] is not None else 0
                 }
                 for r in rows
             ]
@@ -64,7 +69,8 @@ def get_inventory_by_id(inventory_id: int):
                     i.quantity,
                     i.purchase_date,
                     i.expiry_date,
-                    i.storage_temperature
+                    i.storage_temperature,
+                    p.unit
                 FROM inventory i
                 JOIN products p
                     ON i.product_id = p.product_id
@@ -85,7 +91,9 @@ def get_inventory_by_id(inventory_id: int):
                 "quantity": int(row[5]),
                 "purchase_date": str(row[6]) if row[6] is not None else None,
                 "expiry_date": str(row[7]),
-                "storage_temperature": float(row[8]) if row[8] is not None else None
+                "storage_temperature": float(row[8]) if row[8] is not None else None,
+                "unit": row[9],
+                "days_remaining": max((row[7] - date.today()).days, 0) if row[7] is not None else 0
             }
     except HTTPException:
         raise

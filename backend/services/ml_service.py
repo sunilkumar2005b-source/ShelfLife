@@ -255,13 +255,39 @@ def sync_database_predictions() -> MLSyncResponse:
             price = float(batch[5])
             shelf_days = int(batch[6])
 
+            cat_normalized = cat
+            if cat in ["Vegetable", "Fruit", "Fruits", "Vegetables"]:
+                cat_normalized = "Fruits & Vegetables"
+
+            if days_rem <= 2:
+                turnover = 35.0
+                sales_vol = 50.0
+            elif days_rem <= 5:
+                turnover = 60.0
+                sales_vol = 95.0
+            else:
+                turnover = 78.0
+                sales_vol = 135.0
+
+            price_normalized = min(15.0, max(1.5, price / 20.0 if price > 20 else price))
+
             spoilage = ml_predict_spoilage(
-                category=cat,
+                category=cat_normalized,
                 stock_quantity=qty,
                 days_remaining=days_rem,
-                unit_price=price,
+                unit_price=price_normalized,
                 total_shelf_life=shelf_days,
+                sales_volume=sales_vol,
+                turnover_rate=turnover,
             )
+
+            prob = float(spoilage["spoilage_probability"])
+            if prob >= 0.60:
+                assigned_risk = "High"
+            elif prob >= 0.30:
+                assigned_risk = "Medium"
+            else:
+                assigned_risk = "Low"
 
             cur.execute("""
                 INSERT INTO spoilage_predictions (
@@ -273,8 +299,8 @@ def sync_database_predictions() -> MLSyncResponse:
                 prod_id,
                 inv_id,
                 days_rem,
-                spoilage["spoilage_probability"],
-                spoilage["risk_level"],
+                prob,
+                assigned_risk,
                 spoilage["model_name"],
             ))
             synced_spoilage += 1

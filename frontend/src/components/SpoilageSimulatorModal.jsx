@@ -1,4 +1,5 @@
 import { useState } from "react";
+import API_BASE from "../apiConfig";
 
 export default function SpoilageSimulatorModal({ isOpen, onClose }) {
   const [category, setCategory] = useState("Dairy");
@@ -22,7 +23,7 @@ export default function SpoilageSimulatorModal({ isOpen, onClose }) {
     setResult(null);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/ml/predict/spoilage", {
+      const response = await fetch(`${API_BASE}/ml/predict/spoilage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -54,7 +55,7 @@ export default function SpoilageSimulatorModal({ isOpen, onClose }) {
       <div className="modal-content" style={{ maxWidth: 540 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ margin: 0, fontSize: 18, color: "#1e293b" }}>
-            🔬 Interactive Spoilage Risk Classifier
+            Interactive Spoilage Risk Classifier
           </h3>
           <button
             onClick={onClose}

@@ -45,8 +45,8 @@ class RuleConfig(BaseModel):
 
     # Stock-to-demand ratio thresholds
     reorder_buffer_multiplier: float = Field(
-        default=1.0,
-        ge=0.5,
+        default=0.50,
+        ge=0.1,
         le=3.0,
         description="Stock level below predicted_demand * multiplier triggers Reorder"
     )

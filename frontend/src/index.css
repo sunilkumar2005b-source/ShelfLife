@@ -63,7 +63,7 @@
   --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
   --shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06);
   --shadow-glow-emerald: 0 0 20px rgba(16, 185, 129, 0.25);
-  --shadow-glow-ai: 0 0 20px rgba(139, 92, 246, 0.25);
+  --shadow-glow-ai: 0 0 20px rgba(80, 34, 174, 0.25);
 
   /* Radius */
   --radius-sm: 6px;
@@ -94,7 +94,7 @@ html {
 body {
   min-height: 100vh;
   background-color: #f8fafc;
-  color: #1e293b;
+  color: #2f4971;
   overflow-x: hidden;
 }
 

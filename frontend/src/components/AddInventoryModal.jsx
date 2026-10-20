@@ -1,16 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function AddInventoryModal({ isOpen, onClose, onInventoryAdded, products, API }) {
+export default function AddInventoryModal({
+  isOpen,
+  onClose,
+  onInventoryAdded,
+  products = [],
+  API,
+  initialProductId = null,
+}) {
   const [formData, setFormData] = useState({
-    product_id: products[0]?.product_id || 1,
+    product_id: initialProductId || products[0]?.product_id || 1,
     batch_number: "",
-    quantity: "",
+    quantity: "20",
     purchase_date: new Date().toISOString().slice(0, 10),
     expiry_date: "",
     storage_temperature: "4.0",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Auto-populate when modal opens or initialProductId changes
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const targetId = initialProductId || formData.product_id || products[0]?.product_id;
+    const selectedProd = products.find((p) => p.product_id === Number(targetId)) || products[0];
+
+    if (selectedProd) {
+      const shelfDays = selectedProd.shelf_life_days || 7;
+      const exp = new Date();
+      exp.setDate(exp.getDate() + shelfDays);
+
+      let defTemp = "4.0";
+      if (selectedProd.category === "Bakery") defTemp = "18.0";
+      else if (selectedProd.category === "Vegetable") defTemp = "12.0";
+      else if (selectedProd.category === "Fruit") defTemp = "10.0";
+      else if (selectedProd.category === "Meat") defTemp = "2.0";
+
+      const prefix = selectedProd.product_name
+        .replace(/[^a-zA-Z]/g, "")
+        .slice(0, 4)
+        .toUpperCase() || "BATCH";
+      const randomSuffix = Math.floor(Math.random() * 90) + 10;
+
+      setFormData({
+        product_id: selectedProd.product_id,
+        batch_number: `${prefix}-B0${randomSuffix}`,
+        quantity: "25",
+        purchase_date: new Date().toISOString().slice(0, 10),
+        expiry_date: exp.toISOString().slice(0, 10),
+        storage_temperature: defTemp,
+      });
+      setError("");
+    }
+  }, [isOpen, initialProductId, products]);
 
   if (!isOpen) return null;
 
@@ -62,14 +105,47 @@ export default function AddInventoryModal({ isOpen, onClose, onInventoryAdded, p
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
         <div className="modal-header">
           <h3>Add New Inventory Batch</h3>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            {error && <div style={{ color: "#dc3545", marginBottom: 12, fontSize: 13 }}>⚠️ {error}</div>}
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div className="modal-body" style={{ overflowY: "auto", flex: 1, padding: "20px 24px" }}>
+            {error && (
+              <div
+                style={{
+                  background: "#fef2f2",
+                  color: "#dc2626",
+                  padding: "10px 14px",
+                  borderRadius: 6,
+                  border: "1px solid #fecaca",
+                  marginBottom: 16,
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                {error}
+              </div>
+            )}
 
             <div className="form-group">
               <label>Select Product *</label>
@@ -143,11 +219,40 @@ export default function AddInventoryModal({ isOpen, onClose, onInventoryAdded, p
             </div>
           </div>
 
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <div
+            className="modal-footer"
+            style={{
+              padding: "14px 24px",
+              background: "#f8fafc",
+              borderTop: "1px solid #e2e8f0",
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: 12,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              style={{ padding: "8px 16px" }}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+              style={{
+                padding: "8px 22px",
+                fontWeight: 700,
+                fontSize: 13.5,
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
               {submitting ? "Saving..." : "Save Batch"}
             </button>
           </div>

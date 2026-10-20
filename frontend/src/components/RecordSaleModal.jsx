@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import API_BASE from "../apiConfig";
 
 export default function RecordSaleModal({
   isOpen,
@@ -6,7 +7,7 @@ export default function RecordSaleModal({
   products = [],
   inventory = [],
   onSaleCompleted,
-  API = "http://127.0.0.1:8000",
+  API = API_BASE,
   initialProductId = null,
   showToast,
 }) {
@@ -140,9 +141,9 @@ export default function RecordSaleModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
         <div className="modal-header" style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}>
-          <h3>🛒 Record Sale & Deduct Inventory (POS Checkout)</h3>
+          <h3>Record Sale & Deduct Inventory (POS Checkout)</h3>
           <button className="modal-close" onClick={onClose} title="Close">
-            ✕
+            &times;
           </button>
         </div>
 
@@ -154,7 +155,7 @@ export default function RecordSaleModal({
 
             {error && (
               <div style={{ background: "#fef2f2", color: "#991b1b", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 14, border: "1px solid #fecaca" }}>
-                ⚠️ {error}
+                {error}
               </div>
             )}
 
@@ -236,7 +237,7 @@ export default function RecordSaleModal({
             {fefoPreview.length > 0 && (
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>📋 FEFO Deduction Plan (Oldest Batches First):</span>
+                  <span>FEFO Deduction Plan (Oldest Batches First):</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {fefoPreview.map((item, idx) => (
@@ -276,7 +277,7 @@ export default function RecordSaleModal({
               disabled={loading || totalAvailableStock <= 0}
               style={{ background: "linear-gradient(135deg, #059669 0%, #047857 100%)" }}
             >
-              {loading ? "Processing Sale..." : "✓ Complete Sale & Deduct Stock"}
+              {loading ? "Processing Sale..." : "Complete Sale & Deduct Stock"}
             </button>
           </div>
         </form>

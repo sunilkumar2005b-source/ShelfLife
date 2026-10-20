@@ -4,9 +4,10 @@ FastAPI Routes for Advanced Analytics, Report Exports, and Faculty Demo Scenario
 
 import csv
 import io
+from pathlib import Path
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from database import get_db_cursor
 from services.analytics_service import (
@@ -160,6 +161,26 @@ def export_inventory_audit_csv():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unable to export inventory audit CSV: {str(error)}"
         )
+
+
+@router.get("/reports/dataset/ml-training.csv")
+def download_ml_training_dataset():
+    """
+    Downloads the master ML grocery inventory dataset (989 records across 7 categories)
+    used for training Demand Forecasting and Spoilage Risk models.
+    """
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    dataset_path = base_dir / "data" / "raw" / "grocery_inventory.csv"
+    if not dataset_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset file not found at {dataset_path}"
+        )
+    return FileResponse(
+        path=str(dataset_path),
+        media_type="text/csv",
+        filename="ShelfLife_ML_Training_Dataset.csv"
+    )
 
 
 @router.get("/reports/spoilage-risk.csv")

@@ -242,7 +242,8 @@ def get_inventory_intelligence():
                             LIMIT 1
                         ),
                         0
-                    ) AS spoilage_probability
+                    ) AS spoilage_probability,
+                    i.batch_number
                 FROM inventory i
                 JOIN products p
                     ON i.product_id = p.product_id
@@ -261,6 +262,7 @@ def get_inventory_intelligence():
                 storage_temp = float(row[6]) if row[6] is not None else None
                 predicted_demand = float(row[7])
                 spoilage_probability = float(row[8])
+                batch_number = row[9]
 
                 days_remaining = days_until_expiry(expiry_date)
                 risk_level = get_spoilage_risk(spoilage_probability, config=config)
@@ -292,6 +294,8 @@ def get_inventory_intelligence():
                     "inventory_id": inventory_id,
                     "product_id": product_id,
                     "product_name": product_name,
+                    "category": category,
+                    "batch_number": batch_number,
                     "current_stock": int(current_stock),
                     "predicted_demand": int(predicted_demand),
                     "expiry_date": str(expiry_date),

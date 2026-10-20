@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import "./App.css";
 
+import Sidebar from "./components/Sidebar";
 import DashboardView from "./components/DashboardView";
 import ProductsView from "./components/ProductsView";
 import InventoryView from "./components/InventoryView";
@@ -10,8 +11,16 @@ import IntelligenceView from "./components/IntelligenceView";
 import AddProductModal from "./components/AddProductModal";
 import AddInventoryModal from "./components/AddInventoryModal";
 import RecordSaleModal from "./components/RecordSaleModal";
+import {
+  CartIcon,
+  RefreshIcon,
+  CheckIcon,
+  InfoIcon,
+  AlertIcon,
+  StoreIcon,
+} from "./components/Icons";
 
-const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+import { API_BASE as API } from "./apiConfig";
 
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
@@ -47,47 +56,46 @@ function App() {
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
   const [isRecordSaleOpen, setIsRecordSaleOpen] = useState(false);
   const [selectedSaleProductId, setSelectedSaleProductId] = useState(null);
+  const [selectedBatchProductId, setSelectedBatchProductId] = useState(null);
 
   const handleOpenRecordSale = (productId = null) => {
     setSelectedSaleProductId(productId);
     setIsRecordSaleOpen(true);
   };
 
+  const handleOpenAddBatch = (productId = null) => {
+    setSelectedBatchProductId(productId);
+    setIsAddInventoryOpen(true);
+  };
+
+  // Resilient fetch helper: tries primary Vite proxy, then direct http://127.0.0.1:8000
+  const fetchWithFallback = async (path) => {
+    try {
+      const primaryUrl = `${API}${path}`;
+      const res = await fetch(primaryUrl);
+      if (res.ok) return await res.json();
+    } catch {}
+
+    if (API !== "http://127.0.0.1:8000") {
+      try {
+        const fallbackUrl = `http://127.0.0.1:8000${path}`;
+        const res = await fetch(fallbackUrl);
+        if (res.ok) return await res.json();
+      } catch {}
+    }
+
+    return null;
+  };
+
   /* =========================================================
-     FETCH DATA FROM FASTAPI BACKEND
+     FETCH DATA FROM FASTAPI BACKEND WITH DUAL RESILIENCE
   ========================================================= */
   const loadData = async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
+    if (!silent) {
       setIsRefreshing(true);
-      setError("");
+    }
 
-      const [
-        pRes,
-        invRes,
-        sRes,
-        supRes,
-        spRes,
-        dfRes,
-        dashRes,
-        intelRes,
-        isumRes,
-      ] = await Promise.all([
-        fetch(`${API}/products`),
-        fetch(`${API}/inventory`),
-        fetch(`${API}/sales`),
-        fetch(`${API}/suppliers`),
-        fetch(`${API}/spoilage-predictions`),
-        fetch(`${API}/demand-forecasts`),
-        fetch(`${API}/dashboard-summary`),
-        fetch(`${API}/inventory-intelligence`),
-        fetch(`${API}/inventory-intelligence-summary`),
-      ]);
-
-      if (!pRes.ok || !invRes.ok) {
-        throw new Error("Unable to communicate with ShelfLife backend.");
-      }
-
+    try {
       const [
         pData,
         invData,
@@ -99,45 +107,88 @@ function App() {
         intelData,
         isumData,
       ] = await Promise.all([
-        pRes.json(),
-        invRes.json(),
-        sRes.json(),
-        supRes.json(),
-        spRes.json(),
-        dfRes.json(),
-        dashRes.json(),
-        intelRes.json(),
-        isumRes.json(),
+        fetchWithFallback("/products"),
+        fetchWithFallback("/inventory"),
+        fetchWithFallback("/sales"),
+        fetchWithFallback("/suppliers"),
+        fetchWithFallback("/spoilage-predictions"),
+        fetchWithFallback("/demand-forecasts"),
+        fetchWithFallback("/dashboard-summary"),
+        fetchWithFallback("/inventory-intelligence"),
+        fetchWithFallback("/inventory-intelligence-summary"),
       ]);
 
-      setProducts(Array.isArray(pData) ? pData : []);
-      setInventory(Array.isArray(invData) ? invData : []);
-      setSales(Array.isArray(sData) ? sData : []);
-      setSuppliers(Array.isArray(supData) ? supData : []);
-      setSpoilage(Array.isArray(spData) ? spData : []);
-      setForecasts(Array.isArray(dfData) ? dfData : []);
-      setDashboardSummary(dashData);
-      setIntelligenceData(Array.isArray(intelData) ? intelData : []);
-      setIntelligenceSummary(isumData);
-      setBackendOnline(true);
+      if (Array.isArray(pData) && pData.length > 0) setProducts(pData);
+      if (Array.isArray(invData) && invData.length > 0) setInventory(invData);
+      if (Array.isArray(sData)) setSales(sData);
+      if (Array.isArray(supData)) setSuppliers(supData);
+      if (Array.isArray(spData)) setSpoilage(spData);
+      if (Array.isArray(dfData)) setForecasts(dfData);
+      if (dashData) setDashboardSummary(dashData);
+      if (Array.isArray(intelData)) setIntelligenceData(intelData);
+      if (isumData) setIntelligenceSummary(isumData);
 
-      if (silent) {
-        showToast("Retail intelligence data updated from database", "info");
+      // Verify that core data was received
+      if ((pData && pData.length > 0) || (invData && invData.length > 0)) {
+        setBackendOnline(true);
+        setError("");
+        setLoading(false);
+        setIsRefreshing(false);
+        if (silent) {
+          showToast("Data synchronized with database", "info");
+        }
+      } else {
+        throw new Error("Core endpoints not ready yet");
       }
     } catch (err) {
-      console.error("ShelfLife API load error:", err);
-      setError("Unable to connect to backend service. Please check if PostgreSQL and FastAPI are running.");
+      console.warn("ShelfLife API connection waiting for backend:", err);
       setBackendOnline(false);
-      showToast("Backend connection issue detected", "warning");
-    } finally {
-      setLoading(false);
       setIsRefreshing(false);
+      // Only display connecting message if no products loaded yet
+      setProducts((currentProducts) => {
+        if (currentProducts.length === 0) {
+          setError("Connecting to ShelfLife Core Services on http://127.0.0.1:8000... Connecting automatically.");
+        }
+        return currentProducts;
+      });
     }
   };
 
+  // Initial load
   useEffect(() => {
     loadData();
   }, []);
+
+  // Background auto-reconnect heartbeat: polls continuously until backend is online
+  useEffect(() => {
+    if (backendOnline && products.length > 0) return;
+
+    const pingBackend = async () => {
+      try {
+        let isHealthy = false;
+        try {
+          const res = await fetch(`${API}/health`);
+          if (res.ok) isHealthy = true;
+        } catch {}
+
+        if (!isHealthy && API !== "http://127.0.0.1:8000") {
+          try {
+            const res2 = await fetch("http://127.0.0.1:8000/health");
+            if (res2.ok) isHealthy = true;
+          } catch {}
+        }
+
+        if (isHealthy) {
+          setError("");
+          setBackendOnline(true);
+          await loadData(true);
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pingBackend, 1500);
+    return () => clearInterval(interval);
+  }, [backendOnline, products.length]);
 
   // Quick navigation count calculations
   const highRiskCount = spoilage.filter((s) => String(s.risk_level).toLowerCase() === "high").length;
@@ -145,208 +196,185 @@ function App() {
     (i) => i.recommendation === "Urgent Clearance" || i.recommendation === "Sell Quickly"
   ).length;
 
+  const pageTitles = {
+    dashboard: "Executive Dashboard",
+    inventory: "Inventory Batches & Expiry Management",
+    products: "Perishable Product Catalog",
+    spoilage: "Spoilage Risk Radar & ML Classification",
+    forecast: "Demand Forecasting & Sales Projections",
+    intelligence: "AI Decision Engine & Clearance Markdown",
+  };
+
   return (
-    <div className="app">
+    <div className="app-layout">
       {/* Toast Notification Container */}
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.type}`}>
-            <span>
-              {t.type === "success" && "✅"}
-              {t.type === "info" && "ℹ️"}
-              {t.type === "warning" && "⚠️"}
+            <span className="toast-icon">
+              {t.type === "success" && <CheckIcon size={16} />}
+              {t.type === "info" && <InfoIcon size={16} />}
+              {t.type === "warning" && <AlertIcon size={16} />}
             </span>
-            <span>{t.message}</span>
+            <span className="toast-message">{t.message}</span>
           </div>
         ))}
       </div>
 
-      {/* Header */}
-      <header className="header">
-        <div className="header-top">
-          <div className="header-brand">
-            <div className="header-brand-title">
-              <h1>ShelfLife</h1>
-              <span className="header-badge">AI Core v1.0 • M.Tech Software Engineering</span>
+      {/* Left Vertical Sidebar */}
+      <Sidebar
+        activePage={activePage}
+        setActivePage={setActivePage}
+        inventoryCount={inventory.length}
+        productsCount={products.length}
+        highRiskCount={highRiskCount}
+        forecastsCount={forecasts.length}
+        urgentClearanceCount={urgentClearanceCount}
+        onOpenRecordSale={handleOpenRecordSale}
+        backendOnline={backendOnline}
+        isRefreshing={isRefreshing}
+        onRefresh={() => loadData(true)}
+      />
+
+      {/* Main Workspace (Right Side) */}
+      <div className="app-workspace">
+        {/* Top Header Bar */}
+        <header className="workspace-topbar">
+          <div className="topbar-left">
+            <div className="topbar-breadcrumb">
+              <span className="breadcrumb-root">ShelfLife</span>
+              <span className="breadcrumb-sep">/</span>
+              <span className="breadcrumb-active">{pageTitles[activePage] || "Dashboard"}</span>
             </div>
-            <p>Autonomous Perishable Inventory Management & Retail Decision Support</p>
+            <h1 className="topbar-title">{pageTitles[activePage] || "Dashboard"}</h1>
           </div>
 
-          <div className="header-actions">
-            <button
-              className="btn btn-primary"
-              onClick={() => handleOpenRecordSale(null)}
-              style={{
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                fontWeight: 700,
-                boxShadow: "0 4px 12px rgba(16, 185, 129, 0.4)",
-              }}
-              title="Record a customer sale & automatically deduct stock via FEFO"
-            >
-              🛒 Record Sale (POS)
-            </button>
-
+          <div className="topbar-right">
+            {activePage === "dashboard" && (
+              <div className="store-badge" style={{ padding: "6px 14px", fontSize: "12.5px" }}>
+                <StoreIcon size={15} />
+                <span>Small Retail Store</span>
+              </div>
+            )}
             <div className="status-pill">
               <span className={`pulse-dot ${backendOnline ? "" : "offline"}`} />
-              {backendOnline ? "API & PostgreSQL Live (:8000)" : "API Disconnected"}
+              <span>{backendOnline ? "API & PostgreSQL Live (:8000)" : "API Disconnected"}</span>
             </div>
 
             <button
-              className="btn btn-refresh"
+              className="btn btn-secondary topbar-refresh-btn"
               onClick={() => loadData(true)}
               title="Reload fresh data from database"
               disabled={isRefreshing}
             >
-              <span style={{ display: "inline-block", transform: isRefreshing ? "rotate(180deg)" : "none", transition: "transform 0.5s ease" }}>
-                🔄
-              </span>{" "}
-              {isRefreshing ? "Refreshing..." : "Refresh Data"}
+              <RefreshIcon size={15} className={isRefreshing ? "spin-icon" : ""} />
+              <span>{isRefreshing ? "Refreshing..." : "Refresh Data"}</span>
+            </button>
+
+            <button
+              className="btn btn-primary topbar-pos-btn"
+              onClick={() => handleOpenRecordSale(null)}
+              title="Record customer sale & automatically deduct stock via FEFO"
+            >
+              <CartIcon size={16} />
+              <span>Record Sale (POS)</span>
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Navigation */}
-      <nav className="navbar">
-        <div className="navbar-inner">
-          <button
-            className={activePage === "dashboard" ? "active" : ""}
-            onClick={() => setActivePage("dashboard")}
-          >
-            📊 Executive Dashboard
-          </button>
-          <button
-            className={activePage === "inventory" ? "active" : ""}
-            onClick={() => setActivePage("inventory")}
-          >
-            📦 Inventory Batches
-            <span className="nav-counter">{inventory.length}</span>
-          </button>
-          <button
-            className={activePage === "products" ? "active" : ""}
-            onClick={() => setActivePage("products")}
-          >
-            🍎 Catalog
-            <span className="nav-counter">{products.length}</span>
-          </button>
-          <button
-            className={activePage === "spoilage" ? "active" : ""}
-            onClick={() => setActivePage("spoilage")}
-          >
-            ⚠️ Spoilage Risk Radar
-            {highRiskCount > 0 && (
-              <span className="nav-counter" style={{ background: "#ef4444", color: "white" }}>
-                {highRiskCount} High
-              </span>
-            )}
-          </button>
-          <button
-            className={activePage === "forecast" ? "active" : ""}
-            onClick={() => setActivePage("forecast")}
-          >
-            📈 Demand Forecasts
-            <span className="nav-counter">{forecasts.length}</span>
-          </button>
-          <button
-            className={activePage === "intelligence" ? "active" : ""}
-            onClick={() => setActivePage("intelligence")}
-          >
-            🧠 AI Decision Engine
-            {urgentClearanceCount > 0 && (
-              <span className="nav-counter" style={{ background: "#dc2626", color: "white" }}>
-                {urgentClearanceCount} Alert
-              </span>
-            )}
-          </button>
-        </div>
-      </nav>
-
-      {/* Main Content Area */}
-      <main>
-        {error && (
-          <div className="error-box">
-            <div>
-              <strong>Connection Warning:</strong> {error}
+        {/* Content View Container */}
+        <main className="workspace-content">
+          {error && products.length === 0 && (
+            <div className="error-box" style={{ background: "#fef3c7", borderColor: "#fde68a", color: "#92400e" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="pulse-dot offline" style={{ minWidth: 10, minHeight: 10 }} />
+                <div>
+                  <strong>Backend Status:</strong> {error}
+                </div>
+              </div>
+              <button className="btn btn-secondary" onClick={() => loadData(false)}>
+                Retry Connection
+              </button>
             </div>
-            <button className="btn btn-secondary" onClick={() => loadData(false)}>
-              Retry Connection
-            </button>
-          </div>
-        )}
+          )}
 
-        {loading ? (
-          <div className="loading-container">
-            <div className="loading-spinner" />
-            <p style={{ fontSize: 16, color: "#10b981", fontWeight: 600 }}>
-              Synchronizing retail intelligence models & inventory records...
-            </p>
-          </div>
-        ) : (
-          <>
-            {activePage === "dashboard" && (
-              <DashboardView
-                products={products}
-                inventory={inventory}
-                spoilage={spoilage}
-                forecasts={forecasts}
-                intelligenceData={intelligenceData}
-                onNavigate={setActivePage}
-                onRefresh={() => loadData(true)}
-                onOpenRecordSale={handleOpenRecordSale}
-                showToast={showToast}
-              />
-            )}
+          {loading ? (
+            <div className="loading-container">
+              <div className="loading-spinner" />
+              <p style={{ fontSize: 16, color: "#059669", fontWeight: 600 }}>
+                Synchronizing retail intelligence models & inventory records...
+              </p>
+            </div>
+          ) : (
+            <>
+              {activePage === "dashboard" && (
+                <DashboardView
+                  products={products}
+                  inventory={inventory}
+                  spoilage={spoilage}
+                  forecasts={forecasts}
+                  intelligenceData={intelligenceData}
+                  onNavigate={setActivePage}
+                  onRefresh={() => loadData(true)}
+                  onOpenRecordSale={handleOpenRecordSale}
+                  onOpenAddProduct={() => setIsAddProductOpen(true)}
+                  onOpenAddBatch={() => setIsAddInventoryOpen(true)}
+                  showToast={showToast}
+                />
+              )}
 
-            {activePage === "products" && (
-              <ProductsView
-                products={products}
-                inventory={inventory}
-                suppliers={suppliers}
-                onOpenAddModal={() => setIsAddProductOpen(true)}
-                onOpenRecordSale={handleOpenRecordSale}
-                showToast={showToast}
-              />
-            )}
+              {activePage === "products" && (
+                <ProductsView
+                  products={products}
+                  inventory={inventory}
+                  suppliers={suppliers}
+                  onOpenAddModal={() => setIsAddProductOpen(true)}
+                  onOpenRecordSale={handleOpenRecordSale}
+                  onOpenAddBatch={handleOpenAddBatch}
+                  showToast={showToast}
+                />
+              )}
 
-            {activePage === "inventory" && (
-              <InventoryView
-                inventory={inventory}
-                onOpenAddBatch={() => setIsAddInventoryOpen(true)}
-                onOpenRecordSale={handleOpenRecordSale}
-                onRefresh={() => loadData(true)}
-                showToast={showToast}
-                API={API}
-              />
-            )}
+              {activePage === "inventory" && (
+                <InventoryView
+                  inventory={inventory}
+                  onOpenAddBatch={() => handleOpenAddBatch(null)}
+                  onOpenRecordSale={handleOpenRecordSale}
+                  onRefresh={() => loadData(true)}
+                  showToast={showToast}
+                  API={API}
+                />
+              )}
 
-            {activePage === "spoilage" && (
-              <SpoilageView
-                spoilage={spoilage}
-                inventory={inventory}
-                onRefresh={() => loadData(true)}
-                showToast={showToast}
-              />
-            )}
+              {activePage === "spoilage" && (
+                <SpoilageView
+                  spoilage={spoilage}
+                  inventory={inventory}
+                  onRefresh={() => loadData(true)}
+                  showToast={showToast}
+                />
+              )}
 
-            {activePage === "forecast" && (
-              <ForecastView
-                forecasts={forecasts}
-                sales={sales}
-                onRefresh={() => loadData(true)}
-                showToast={showToast}
-              />
-            )}
+              {activePage === "forecast" && (
+                <ForecastView
+                  forecasts={forecasts}
+                  sales={sales}
+                  onRefresh={() => loadData(true)}
+                  showToast={showToast}
+                />
+              )}
 
-            {activePage === "intelligence" && (
-              <IntelligenceView
-                intelligenceData={intelligenceData}
-                summaryData={intelligenceSummary}
-                showToast={showToast}
-              />
-            )}
-          </>
-        )}
-      </main>
+              {activePage === "intelligence" && (
+                <IntelligenceView
+                  intelligenceData={intelligenceData}
+                  summaryData={intelligenceSummary}
+                  showToast={showToast}
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
       {/* Modals */}
       <AddProductModal
@@ -354,7 +382,7 @@ function App() {
         onClose={() => setIsAddProductOpen(false)}
         onProductAdded={(newProd) => {
           setProducts((prev) => [...prev, newProd]);
-          showToast(`Product "${newProd.product_name}" added and ML predictions generated!`);
+          showToast(`Product "${newProd.product_name}" added and inventory initialized.`);
           loadData(true);
         }}
         API={API}
@@ -362,13 +390,17 @@ function App() {
 
       <AddInventoryModal
         isOpen={isAddInventoryOpen}
-        onClose={() => setIsAddInventoryOpen(false)}
+        onClose={() => {
+          setIsAddInventoryOpen(false);
+          setSelectedBatchProductId(null);
+        }}
         onInventoryAdded={(newBatch) => {
           setInventory((prev) => [...prev, newBatch]);
-          showToast(`Batch ${newBatch.batch_number} created with live degradation evaluation!`);
+          showToast(`Batch ${newBatch.batch_number} added. Stock on-hand updated.`);
           loadData(true);
         }}
         products={products}
+        initialProductId={selectedBatchProductId}
         API={API}
       />
 

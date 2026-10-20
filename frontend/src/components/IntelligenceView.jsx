@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { RiskIcon, SlidersIcon, InventoryIcon, InfoIcon, CheckIcon } from "./Icons";
 
 export default function IntelligenceView({ intelligenceData, summaryData, showToast }) {
   const [search, setSearch] = useState("");
@@ -6,11 +7,11 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
   const [sortField, setSortField] = useState("health_score");
   const [sortDirection, setSortDirection] = useState("asc");
 
-  // Summary counts
-  const urgentCount = summaryData?.urgent_clearance ?? intelligenceData.filter((i) => i.recommendation === "Urgent Clearance").length;
+  // Summary counts with resilient matching
+  const urgentCount = summaryData?.urgent_clearance ?? intelligenceData.filter((i) => i.recommendation === "Urgent Clearance" || i.recommendation === "Clearance Action").length;
   const sellQuicklyCount = summaryData?.sell_quickly ?? intelligenceData.filter((i) => i.recommendation === "Sell Quickly").length;
   const reorderCount = summaryData?.reorder ?? intelligenceData.filter((i) => i.recommendation === "Reorder").length;
-  const monitorCount = summaryData?.monitor ?? intelligenceData.filter((i) => i.recommendation === "Monitor Stock").length;
+  const monitorCount = summaryData?.monitor ?? intelligenceData.filter((i) => i.recommendation === "Monitor Stock" || i.recommendation === "Monitor").length;
   const sufficientCount = summaryData?.sufficient ?? intelligenceData.filter((i) => i.recommendation === "Sufficient Stock").length;
 
   const handleSort = (field) => {
@@ -22,11 +23,21 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
     }
   };
 
+  const getActionSlug = (rec) => {
+    const r = (rec || "").toLowerCase().trim();
+    if (r === "clearance action" || r === "urgent clearance") return "urgent-clearance";
+    if (r === "sell quickly") return "sell-quickly";
+    if (r === "reorder") return "reorder";
+    if (r === "monitor" || r === "monitor stock") return "monitor-stock";
+    if (r === "sufficient stock" || r === "sufficient") return "sufficient-stock";
+    return r.replace(/\s+/g, "-");
+  };
+
   const processedData = useMemo(() => {
     return intelligenceData
       .filter((item) => {
         const nameMatch = (item.product_name || "").toLowerCase().includes(search.toLowerCase());
-        const actionSlug = (item.recommendation || "").toLowerCase().replace(/\s+/g, "-");
+        const actionSlug = getActionSlug(item.recommendation);
         const actionMatch = filterAction === "all" || actionSlug === filterAction;
         return nameMatch && actionMatch;
       })
@@ -45,14 +56,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
 
   return (
     <>
-      <div className="table-toolbar">
-        <div>
-          <h2 className="page-title">Inventory Intelligence & Decision Engine</h2>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13.5 }}>
-            Automated multi-factor synthesis: stock levels, predicted demand, shelf life, and spoilage risk.
-          </p>
-        </div>
-      </div>
+
 
       {/* 5 Recommendation Summary KPI Cards */}
       <div className="intelligence-summary" style={{ marginBottom: 20 }}>
@@ -65,7 +69,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
           }}
           title="Click to filter Urgent Clearance items"
         >
-          <span>🚨</span>
+          <span style={{ display: "flex", alignItems: "center" }}><RiskIcon size={22} /></span>
           <div>
             <h3>Urgent Clearance</h3>
             <strong>{urgentCount}</strong>
@@ -81,7 +85,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
           }}
           title="Click to filter Sell Quickly items"
         >
-          <span>⚡</span>
+          <span style={{ display: "flex", alignItems: "center" }}><SlidersIcon size={22} /></span>
           <div>
             <h3>Sell Quickly</h3>
             <strong>{sellQuicklyCount}</strong>
@@ -97,7 +101,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
           }}
           title="Click to filter Reorder items"
         >
-          <span>📦</span>
+          <span style={{ display: "flex", alignItems: "center" }}><InventoryIcon size={22} /></span>
           <div>
             <h3>Reorder Stock</h3>
             <strong>{reorderCount}</strong>
@@ -113,7 +117,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
           }}
           title="Click to filter Monitor Stock items"
         >
-          <span>👀</span>
+          <span style={{ display: "flex", alignItems: "center" }}><InfoIcon size={22} /></span>
           <div>
             <h3>Monitor Stock</h3>
             <strong>{monitorCount}</strong>
@@ -129,7 +133,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
           }}
           title="Click to filter Sufficient Stock items"
         >
-          <span>✅</span>
+          <span style={{ display: "flex", alignItems: "center" }}><CheckIcon size={22} /></span>
           <div>
             <h3>Sufficient Stock</h3>
             <strong>{sufficientCount}</strong>
@@ -143,7 +147,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
             <input
               type="text"
               className="search-input"
-              placeholder="🔍 Search product title..."
+              placeholder="Search product title..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "100%", paddingRight: search ? 32 : 14 }}
@@ -164,7 +168,7 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
                 }}
                 title="Clear search"
               >
-                ✕
+                &times;
               </button>
             )}
           </div>
@@ -177,11 +181,11 @@ export default function IntelligenceView({ intelligenceData, summaryData, showTo
               onChange={(e) => setFilterAction(e.target.value)}
             >
               <option value="all">All Recommendations ({intelligenceData.length})</option>
-              <option value="urgent-clearance">🚨 Urgent Clearance ({urgentCount})</option>
-              <option value="sell-quickly">⚡ Sell Quickly ({sellQuicklyCount})</option>
-              <option value="reorder">📦 Reorder ({reorderCount})</option>
-              <option value="monitor-stock">👀 Monitor Stock ({monitorCount})</option>
-              <option value="sufficient-stock">✅ Sufficient Stock ({sufficientCount})</option>
+              <option value="urgent-clearance">Urgent Clearance ({urgentCount})</option>
+              <option value="sell-quickly">Sell Quickly ({sellQuicklyCount})</option>
+              <option value="reorder">Reorder ({reorderCount})</option>
+              <option value="monitor-stock">Monitor Stock ({monitorCount})</option>
+              <option value="sufficient-stock">Sufficient Stock ({sufficientCount})</option>
             </select>
           </div>
         </div>
